@@ -76,117 +76,116 @@ module.exports = (req, res) => {
   </div>
 </div>
 <script>
-  // Parametri URL
+  // ── Parametri URL ──────────────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
-  const hostParam = urlParams.get('host') || '';
-  let shop = urlParams.get('shop') || '';
+  const hostParam  = urlParams.get('host')     || '';
+  const idToken    = urlParams.get('id_token') || '';  // JWT da App Bridge v4
+  let   shop       = urlParams.get('shop')     || '';
 
   // Decodifica shop da host se manca
   if (!shop && hostParam) {
     try { shop = atob(hostParam).split('/')[0]; } catch(e) {}
   }
 
-  // Persistenza shop in sessionStorage
+  // Persistenza shop
   if (shop) sessionStorage.setItem('trystyleai_shop', shop);
-  else shop = sessionStorage.getItem('trystyleai_shop') || '';
+  else      shop = sessionStorage.getItem('trystyleai_shop') || '';
 
-  // App Bridge dalla CDN Shopify (obbligatorio per review)
-  let appBridgeApp = null;
-  let getSessionToken = null;
+  // ── App Bridge v4 (CDN Shopify) ────────────────────────────
+  // Con App Bridge v4 il session token arriva già nell'URL come id_token.
+  // Usiamo il modulo solo per refresharlo quando scade.
+  let _sessionTokenFn = null;
+  if (window.shopify) {
+    // App Bridge v4 globale iniettato da Shopify
+    _sessionTokenFn = () => window.shopify.idToken();
+  }
 
-  try {
-    if (window['shopify'] && hostParam) {
-      // App Bridge v4 (nuovo, dalla CDN Shopify)
-      appBridgeApp = window['shopify'];
-      getSessionToken = async () => {
-        const { getSessionToken: gst } = await import('https://cdn.shopify.com/shopifycloud/app-bridge.js');
-        return gst(appBridgeApp);
-      };
-    } else if (window['app-bridge'] && hostParam) {
-      // App Bridge v3 fallback
-      const AppBridge = window['app-bridge'];
-      appBridgeApp = AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
-      getSessionToken = () => AppBridge.actions.SessionToken.getSessionToken(appBridgeApp);
+  async function getIdToken() {
+    // 1) prova App Bridge v4
+    if (_sessionTokenFn) {
+      try { return await _sessionTokenFn(); } catch(e) {}
     }
-  } catch(e) { console.warn('App Bridge init error:', e); }
+    // 2) usa quello già nell'URL (primo caricamento)
+    if (idToken) return idToken;
+    // 3) leggi il token OAuth dal cookie (fallback)
+    try {
+      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
+      const match = document.cookie.split(';').map(c => c.trim())
+        .find(c => c.startsWith(cookieKey + '='));
+      if (match) return '__oauth__' + decodeURIComponent(match.split('=').slice(1).join('='));
+    } catch(e) {}
+    return null;
+  }
 
+  // ── Redirect a install (App Bridge v4) ────────────────────
   function redirectToInstall() {
     const installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
-    if (appBridgeApp && window['app-bridge']) {
+    // App Bridge v4
+    if (window.shopify && window.shopify.navigate) {
+      try { window.shopify.navigate(installUrl); return; } catch(e) {}
+    }
+    // App Bridge v3 fallback
+    const AB = window['app-bridge'];
+    if (AB && hostParam) {
       try {
-        const AppBridge = window['app-bridge'];
-        const Redirect = AppBridge.actions.Redirect;
-        Redirect.create(appBridgeApp).dispatch(Redirect.Action.REMOTE, installUrl);
+        const app3 = AB.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
+        AB.actions.Redirect.create(app3).dispatch(AB.actions.Redirect.Action.REMOTE, installUrl);
         return;
       } catch(e) {}
     }
-    (window.top || window).location.href = installUrl;
+    // Ultimo fallback — usa un link visibile invece di navigare programmaticamente
+    document.getElementById('app').innerHTML =
+      '<div class="alert alert-warning">Sessione scaduta. <a href="' + installUrl + '" class="reinstall-btn">Reinstalla l\'app</a></div>';
   }
 
+  // ── Carica dashboard ───────────────────────────────────────
   async function loadDashboard() {
     if (!shop) {
-      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Parametro shop mancante. Apri l&#39;app dall&#39;admin Shopify.</div>';
+      document.getElementById('app').innerHTML =
+        '<div class="alert alert-danger">Parametro shop mancante. Apri l\'app dall\'admin Shopify.</div>';
       return;
     }
 
     try {
-      // Ottieni session token da App Bridge (autenticazione ufficiale Shopify)
-      let sessionToken = null;
-      if (getSessionToken) {
-        try { sessionToken = await getSessionToken(); } catch(e) { console.warn('Session token error:', e); }
-      }
+      const tok = await getIdToken();
+      if (!tok) { redirectToInstall(); return; }
 
-      // Fallback: leggi token OAuth dal cookie (compatibilità backward)
-      let oauthToken = '';
-      if (!sessionToken) {
-        try {
-          const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
-          const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
-          if (match) oauthToken = decodeURIComponent(match.split('=').slice(1).join('='));
-        } catch(e) {}
-        if (!oauthToken) { redirectToInstall(); return; }
-      }
-
-      // Chiama billing con session token (preferito) o oauth token (fallback)
-      const authParam = sessionToken
-        ? '&session_token=' + encodeURIComponent(sessionToken)
-        : '&token=' + encodeURIComponent(oauthToken);
+      // Determina se è un session JWT o un token OAuth
+      const isOAuth = tok.startsWith('__oauth__');
+      const authParam = isOAuth
+        ? '&token=' + encodeURIComponent(tok.slice(9))
+        : '&session_token=' + encodeURIComponent(tok);
 
       const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + authParam);
-      if (!res.ok) throw new Error('Risposta ' + res.status);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      renderDashboard(data);
+      renderDashboard(data, tok, isOAuth);
     } catch(err) {
       console.error('Dashboard error:', err);
-      // Fallback: mostra i piani senza dati
       renderDashboard({
-        shop: shop,
-        plan: 'none',
-        planName: 'Nessun piano',
-        status: 'pending',
-        callsUsed: 0,
-        callsLimit: 0,
+        shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
+        callsUsed: 0, callsLimit: 0,
         plans: [
           { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
           { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
           { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
         ]
-      });
+      }, '', false);
     }
   }
 
-  function renderDashboard(data) {
+  function renderDashboard(data, tok, isOAuth) {
     const pct = data.callsLimit > 0 ? Math.min(100, Math.round(data.callsUsed / data.callsLimit * 100)) : 0;
     const remaining = Math.max(0, data.callsLimit - data.callsUsed);
     const statusClass = data.status === 'active' ? 'badge-active' : data.status === 'pending' ? 'badge-pending' : data.status === 'cancelled' ? 'badge-cancelled' : 'badge-none';
     const dotClass = data.status === 'active' ? 'dot-green' : data.status === 'pending' ? 'dot-yellow' : 'dot-red';
-    const tok = token || '';
+    const oauthTok = (isOAuth && tok) ? tok.slice(9) : (tok || '');
     const shopEnc = encodeURIComponent(shop);
 
     const plansHtml = (data.plans || []).map(p => {
       const isActive = p.key === data.plan && data.status === 'active';
-      const btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(tok);
+      const btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok);
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
         '<div class="plan-name">' + p.name + '</div>' +
         '<div class="plan-price">€' + p.price + '<span>/mese</span></div>' +
