@@ -183,8 +183,9 @@ module.exports = (req, res) => {
       '</div>';
     }).join('');
 
+    const reinstallUrl = '/api/install?shop=' + shopEnc;
     const reinstallAlert = data.noToken
-      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" onclick="window.open(\'/api/install?shop=' + shopEnc + '\',\'_blank\',\'width=600,height=700\')">Riautentica l&#39;app</button></div>'
+      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" id="reauth-btn">Riautentica l&#39;app</button></div>'
       : '';
 
     document.getElementById('app').innerHTML =
@@ -207,6 +208,14 @@ module.exports = (req, res) => {
         : '') +
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
+
+    // Attach reauth button handler after DOM insert
+    var reauthBtn = document.getElementById('reauth-btn');
+    if (reauthBtn) {
+      reauthBtn.addEventListener('click', function() {
+        window.open(reinstallUrl, '_blank', 'width=600,height=700');
+      });
+    }
   }
 
   loadDashboard();
