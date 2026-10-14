@@ -184,7 +184,7 @@ module.exports = (req, res) => {
     }).join('');
 
     const reinstallAlert = data.noToken
-      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" onclick="(window.top || window).location.href=\'/api/install?shop=' + shopEnc + '\'">Riautentica l&#39;app</button></div>'
+      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" onclick="window.open(\'/api/install?shop=' + shopEnc + '\',\'_blank\',\'width=600,height=700\')">Riautentica l&#39;app</button></div>'
       : '';
 
     document.getElementById('app').innerHTML =
