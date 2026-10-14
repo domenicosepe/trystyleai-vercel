@@ -179,6 +179,7 @@ module.exports = (req, res) => {
         ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok)
         : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + (idToken ? '&session_token=' + encodeURIComponent(idToken) : '');
       var extra = p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '';
+      var planKey = p.key;
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
         '<div class="plan-name">' + p.name + '</div>' +
         '<div class="plan-price">EUR ' + p.price + '<span>/mese</span></div>' +
@@ -186,7 +187,7 @@ module.exports = (req, res) => {
         '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + extra + '</ul>' +
         (isActive
           ? '<div class="btn btn-active">Piano attuale</div>'
-          : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a>' +
+          : '<button onclick="subscribePlan(\'' + planKey + '\',\'' + btnUrl + '\')" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</button>' +
             '<div class="trial-note">Poi EUR ' + p.price + '/mese - annulla quando vuoi</div>'
         ) + '</div>';
     }).join('');
@@ -214,6 +215,17 @@ module.exports = (req, res) => {
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
   }
+
+  window.subscribePlan = function(planKey, url) {
+    // App Bridge top-level redirect — evita il blocco X-Frame-Options di Shopify OAuth
+    if (window.shopify && window.shopify.navigate) {
+      window.shopify.navigate(url);
+    } else if (window.top) {
+      window.top.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  };
 
   loadDashboard();
 })();
