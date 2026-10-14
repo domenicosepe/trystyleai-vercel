@@ -161,8 +161,9 @@
   const createApp = AppBridge.default;
 
   const urlParams = new URLSearchParams(window.location.search);
-  const shop = urlParams.get('shop') || urlParams.get('embedded') || window.shopOrigin;
-  const host = urlParams.get('host');
+  const params = new URLSearchParams(window.location.search);
+  const shop = params.get('shop') || sessionStorage.getItem('trystyleai_shop');
+  if (shop) sessionStorage.setItem('trystyleai_shop', shop);
 
   let appBridge;
   try {
