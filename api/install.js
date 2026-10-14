@@ -5,7 +5,7 @@ const axios = require('axios');
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
-const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields';
+const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields,read_orders';
 
 module.exports = async (req, res) => {
   const { shop, code, hmac, state } = req.query;

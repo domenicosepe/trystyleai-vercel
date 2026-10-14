@@ -96,10 +96,25 @@ module.exports = (req, res) => {
 
   // App Bridge
   const AppBridge = window['app-bridge'];
+  let appBridgeApp = null;
   if (AppBridge && hostParam) {
     try {
-      AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
+      appBridgeApp = AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
     } catch(e) {}
+  }
+
+  function redirectToInstall() {
+    const installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
+    // App Bridge redirect nativo (top-level, fuori dall'iframe)
+    if (appBridgeApp) {
+      try {
+        const Redirect = AppBridge.actions.Redirect;
+        Redirect.create(appBridgeApp).dispatch(Redirect.Action.REMOTE, installUrl);
+        return;
+      } catch(e) {}
+    }
+    // Fallback: top-level redirect
+    (window.top || window).location.href = installUrl;
   }
 
   async function loadDashboard() {
@@ -108,9 +123,9 @@ module.exports = (req, res) => {
       return;
     }
 
-    // Se non c'è token, mostra i piani con bottone reinstalla
+    // Se non c'è token, redirect diretto all'install (flusso OAuth nativo Shopify)
     if (!token) {
-      showNoToken();
+      redirectToInstall();
       return;
     }
 
@@ -137,24 +152,6 @@ module.exports = (req, res) => {
         ]
       });
     }
-  }
-
-  function showNoToken() {
-    // Nessun token — mostra piani statici e invita a reinstallare per autenticarsi
-    renderDashboard({
-      shop: shop,
-      plan: 'none',
-      planName: 'Nessun piano',
-      status: 'pending',
-      callsUsed: 0,
-      callsLimit: 0,
-      noToken: true,
-      plans: [
-        { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
-        { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
-        { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
-      ]
-    });
   }
 
   function renderDashboard(data) {
