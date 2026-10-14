@@ -187,7 +187,7 @@ module.exports = (req, res) => {
         '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + extra + '</ul>' +
         (isActive
           ? '<div class="btn btn-active">Piano attuale</div>'
-          : '<button onclick="subscribePlan(\'' + planKey + '\',\'' + btnUrl + '\')" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</button>' +
+          : '<button data-plan="' + planKey + '" data-url="' + btnUrl.replace(/"/g, '&quot;') + '" class="btn btn-primary subscribe-btn">Prova gratis ' + p.trialDays + ' giorni</button>' +
             '<div class="trial-note">Poi EUR ' + p.price + '/mese - annulla quando vuoi</div>'
         ) + '</div>';
     }).join('');
@@ -215,6 +215,20 @@ module.exports = (req, res) => {
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
   }
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.subscribe-btn');
+    if (!btn) return;
+    var url = btn.getAttribute('data-url');
+    if (!url) return;
+    if (window.shopify && window.shopify.navigate) {
+      window.shopify.navigate(url);
+    } else if (window.top) {
+      window.top.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  });
 
   window.subscribePlan = function(planKey, url) {
     // App Bridge top-level redirect — evita il blocco X-Frame-Options di Shopify OAuth
