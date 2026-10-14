@@ -40,39 +40,64 @@ module.exports = async (req, res) => {
     const accessToken = tokenRes.data.access_token;
 
     // Salva access token come metafield del negozio
-    await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`, {
-      metafield: {
-        namespace: 'trystyleai',
-        key: 'access_token',
-        value: accessToken,
-        type: 'single_line_text_field'
-      }
-    }, { headers: { 'X-Shopify-Access-Token': accessToken } });
+    await setMetafield(shop, accessToken, 'access_token', accessToken);
 
-    // Inizializza contatori
-    await setMetafield(shop, accessToken, 'calls_used', '0');
-    await setMetafield(shop, accessToken, 'calls_limit', '0');
-    await setMetafield(shop, accessToken, 'plan', 'none');
-    await setMetafield(shop, accessToken, 'status', 'pending');
+    // Inizializza contatori (solo se non esistono già)
+    await setMetafieldIfEmpty(shop, accessToken, 'calls_used', '0');
+    await setMetafieldIfEmpty(shop, accessToken, 'calls_limit', '0');
+    await setMetafieldIfEmpty(shop, accessToken, 'plan', 'none');
+    await setMetafieldIfEmpty(shop, accessToken, 'status', 'pending');
 
     // Installa script tag
-    await axios.post(`https://${shop}/admin/api/2024-01/script_tags.json`, {
-      script_tag: { event: 'onload', src: `${APP_URL}/tryon-widget.js` }
-    }, { headers: { 'X-Shopify-Access-Token': accessToken } });
+    try {
+      await axios.post(`https://${shop}/admin/api/2024-01/script_tags.json`, {
+        script_tag: { event: 'onload', src: `${APP_URL}/api/widget` }
+      }, { headers: { 'X-Shopify-Access-Token': accessToken } });
+    } catch(e) {}
 
-    // Redirect alla dashboard embedded
+    // Redirect alla dashboard embedded con token e host
     const host = Buffer.from(`${shop}/admin`).toString('base64');
-    res.redirect(`https://${shop}/admin/apps/${API_KEY}?host=${host}`);
+    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&token=${encodeURIComponent(accessToken)}&host=${host}`);
+
   } catch (err) {
     console.error('Install error:', err.response?.data || err.message);
-    res.status(500).send('Errore installazione');
+    res.status(500).send('Errore installazione: ' + (err.response?.data?.error_description || err.message));
   }
 };
 
 async function setMetafield(shop, token, key, value) {
   try {
-    await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`, {
-      metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' }
-    }, { headers: { 'X-Shopify-Access-Token': token } });
+    // Prima cerca se esiste già
+    const r = await axios.get(
+      `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
+      { headers: { 'X-Shopify-Access-Token': token } }
+    );
+    const mf = r.data.metafields?.[0];
+    if (mf) {
+      await axios.put(`https://${shop}/admin/api/2024-01/metafields/${mf.id}.json`,
+        { metafield: { id: mf.id, value, type: 'single_line_text_field' } },
+        { headers: { 'X-Shopify-Access-Token': token } }
+      );
+    } else {
+      await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
+        { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
+        { headers: { 'X-Shopify-Access-Token': token } }
+      );
+    }
+  } catch (e) {}
+}
+
+async function setMetafieldIfEmpty(shop, token, key, value) {
+  try {
+    const r = await axios.get(
+      `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
+      { headers: { 'X-Shopify-Access-Token': token } }
+    );
+    if (!r.data.metafields?.length) {
+      await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
+        { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
+        { headers: { 'X-Shopify-Access-Token': token } }
+      );
+    }
   } catch (e) {}
 }
