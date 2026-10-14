@@ -87,12 +87,18 @@ module.exports = (req, res) => {
     try { shop = atob(hostParam).split('/')[0]; } catch(e) {}
   }
 
-  // Persistenza in sessionStorage
+  // Persistenza shop in sessionStorage
   if (shop) sessionStorage.setItem('trystyleai_shop', shop);
   else shop = sessionStorage.getItem('trystyleai_shop') || '';
 
-  if (token) sessionStorage.setItem('trystyleai_token', token);
-  else token = sessionStorage.getItem('trystyleai_token') || '';
+  // Token: prima da URL, poi da cookie (impostato da install.js server-side)
+  if (!token) {
+    try {
+      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
+      const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
+      if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
+    } catch(e) {}
+  }
 
   // App Bridge
   const AppBridge = window['app-bridge'];
@@ -172,18 +178,12 @@ module.exports = (req, res) => {
         '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + (p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '') + '</ul>' +
         (isActive
           ? '<div class="btn btn-active">Piano attuale</div>'
-          : (data.noToken
-            ? '<div class="btn btn-active" style="background:#f1f2f4;color:#6d7175">Attiva sessione prima</div>'
-            : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a><div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
-          )
+          : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a><div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
         ) +
       '</div>';
     }).join('');
 
-    const reinstallUrl = '/api/install?shop=' + shopEnc;
-    const reinstallAlert = data.noToken
-      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" id="reauth-btn">Riautentica l&#39;app</button></div>'
-      : '';
+    const reinstallAlert = '';
 
     document.getElementById('app').innerHTML =
       reinstallAlert +
@@ -206,13 +206,6 @@ module.exports = (req, res) => {
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
 
-    // Attach reauth button handler after DOM insert
-    var reauthBtn = document.getElementById('reauth-btn');
-    if (reauthBtn) {
-      reauthBtn.addEventListener('click', function() {
-        window.open(reinstallUrl, '_blank', 'width=600,height=700');
-      });
-    }
   }
 
   loadDashboard();

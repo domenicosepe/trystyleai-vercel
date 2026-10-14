@@ -19,9 +19,12 @@ module.exports = async (req, res) => {
   const { action, shop, plan } = req.query;
   let { token } = req.query;
 
-  // Se non c'è token in query, lo recupera dai metafield
+  // Se non c'è token in query, lo legge dal cookie
   if (!token && shop) {
-    token = await getTokenFromMeta(shop);
+    const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
+    const cookies = req.headers.cookie || '';
+    const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
+    if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
   }
 
   // ── Crea abbonamento ──────────────────────────────────────
