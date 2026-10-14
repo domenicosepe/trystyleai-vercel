@@ -78,9 +78,9 @@ module.exports = (req, res) => {
 <script>
   // Parametri URL
   const urlParams = new URLSearchParams(window.location.search);
-  const hostParam = urlParams.get('host') || '${host || ''}';
-  let shop = urlParams.get('shop') || '${shop || ''}';
-  let token = urlParams.get('token') || '${token || ''}';
+  const hostParam = urlParams.get('host') || '';
+  let shop = urlParams.get('shop') || '';
+  let token = urlParams.get('token') || '';
 
   // Decodifica shop da host se manca
   if (!shop && hostParam) {
