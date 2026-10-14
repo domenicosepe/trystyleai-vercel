@@ -45,7 +45,11 @@ module.exports = async (req, res) => {
     if (!shop || !plan || !PLANS[plan]) {
       return res.status(400).json({ error: 'Parametri non validi' });
     }
-    if (!token) return res.status(401).json({ error: 'Token mancante. Reinstalla l\'app.' });
+    if (!token) {
+      // Nessun token OAuth — reindirizza all'installazione OAuth
+      const installUrl = `${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`;
+      return res.redirect(installUrl);
+    }
 
     const p = PLANS[plan];
     const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}&token=${encodeURIComponent(token)}`;
