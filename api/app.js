@@ -62,7 +62,7 @@ module.exports = (req, res) => {
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
     .alert-warning { background: #fff3cd; border: 1px solid #ffc107; color: #856404; }
     .alert-danger { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-    .reinstall-btn { display: inline-block; margin-top: 12px; padding: 10px 20px; background: #7b2ff7; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .reinstall-btn { display: inline-block; margin-top: 12px; padding: 10px 20px; background: #7b2ff7; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border: none; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -184,7 +184,7 @@ module.exports = (req, res) => {
     }).join('');
 
     const reinstallAlert = data.noToken
-      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <a class="reinstall-btn" href="/api/install?shop=' + shopEnc + '">Riautentica l&#39;app</a></div>'
+      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <button class="reinstall-btn" onclick="(window.top || window).location.href=\'/api/install?shop=' + shopEnc + '\'">Riautentica l&#39;app</button></div>'
       : '';
 
     document.getElementById('app').innerHTML =
