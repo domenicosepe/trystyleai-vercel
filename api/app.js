@@ -1,5 +1,7 @@
-// api/app.js — Serve la dashboard HTML embedded
+// api/app.js — Dashboard embedded TryStyleAI
 module.exports = (req, res) => {
+  const { shop, token, host } = req.query;
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com");
@@ -34,7 +36,7 @@ module.exports = (req, res) => {
     .progress-fill { height: 100%; background: linear-gradient(90deg, #7b2ff7, #00c6ff); border-radius: 4px; transition: width 0.4s ease; }
     .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #6d7175; margin-top: 6px; }
     .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
-    .plan-card { background: #fff; border: 2px solid #e1e3e5; border-radius: 12px; padding: 20px; position: relative; transition: border-color 0.2s; }
+    .plan-card { background: #fff; border: 2px solid #e1e3e5; border-radius: 12px; padding: 20px; position: relative; }
     .plan-card.active { border-color: #7b2ff7; }
     .plan-card.popular::before { content: 'Più popolare'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #7b2ff7; color: white; font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 20px; }
     .plan-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
@@ -48,7 +50,6 @@ module.exports = (req, res) => {
     .btn:hover { opacity: 0.85; }
     .btn-primary { background: #7b2ff7; color: white; }
     .btn-active { background: #e1e3e5; color: #6d7175; cursor: default; }
-    .btn-danger { background: #fff; color: #d72c0d; border: 1px solid #d72c0d; margin-top: 8px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
     .dot-green { background: #00a047; }
     .dot-yellow { background: #ffc453; }
@@ -61,6 +62,7 @@ module.exports = (req, res) => {
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
     .alert-warning { background: #fff3cd; border: 1px solid #ffc107; color: #856404; }
     .alert-danger { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+    .reinstall-btn { display: inline-block; margin-top: 12px; padding: 10px 20px; background: #7b2ff7; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -74,34 +76,85 @@ module.exports = (req, res) => {
   </div>
 </div>
 <script>
+  // Parametri URL
   const urlParams = new URLSearchParams(window.location.search);
-  const host = urlParams.get('host');
-  let shop = urlParams.get('shop');
-  if (!shop && host) {
-    try { shop = atob(host).split('/')[0]; } catch(e) {}
-  }
-  if (!shop) shop = sessionStorage.getItem('trystyleai_shop');
-  if (shop) sessionStorage.setItem('trystyleai_shop', shop);
+  const hostParam = urlParams.get('host') || '${host || ''}';
+  let shop = urlParams.get('shop') || '${shop || ''}';
+  let token = urlParams.get('token') || '${token || ''}';
 
+  // Decodifica shop da host se manca
+  if (!shop && hostParam) {
+    try { shop = atob(hostParam).split('/')[0]; } catch(e) {}
+  }
+
+  // Persistenza in sessionStorage
+  if (shop) sessionStorage.setItem('trystyleai_shop', shop);
+  else shop = sessionStorage.getItem('trystyleai_shop') || '';
+
+  if (token) sessionStorage.setItem('trystyleai_token', token);
+  else token = sessionStorage.getItem('trystyleai_token') || '';
+
+  // App Bridge
   const AppBridge = window['app-bridge'];
-  if (AppBridge && host) {
+  if (AppBridge && hostParam) {
     try {
-      AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host, forceRedirect: true });
+      AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
     } catch(e) {}
   }
 
   async function loadDashboard() {
     if (!shop) {
-      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Apri l\'app dall\'admin Shopify.</div>';
+      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Parametro shop mancante. Apri l\'app dall\'admin Shopify.</div>';
       return;
     }
+
+    // Se non c'è token, mostra i piani con bottone reinstalla
+    if (!token) {
+      showNoToken();
+      return;
+    }
+
     try {
-      const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + '&token=' + encodeURIComponent(sessionStorage.getItem('trystyleai_token') || ''));
+      const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + '&token=' + encodeURIComponent(token));
+      if (!res.ok) throw new Error('Risposta ' + res.status);
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       renderDashboard(data);
     } catch(err) {
-      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Errore: ' + err.message + '</div>';
+      console.error('Dashboard error:', err);
+      // Fallback: mostra i piani senza dati
+      renderDashboard({
+        shop: shop,
+        plan: 'none',
+        planName: 'Nessun piano',
+        status: 'pending',
+        callsUsed: 0,
+        callsLimit: 0,
+        plans: [
+          { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
+          { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
+          { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
+        ]
+      });
     }
+  }
+
+  function showNoToken() {
+    // Nessun token — mostra piani statici e invita a reinstallare per autenticarsi
+    renderDashboard({
+      shop: shop,
+      plan: 'none',
+      planName: 'Nessun piano',
+      status: 'pending',
+      callsUsed: 0,
+      callsLimit: 0,
+      noToken: true,
+      plans: [
+        { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
+        { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
+        { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
+      ]
+    });
   }
 
   function renderDashboard(data) {
@@ -109,35 +162,51 @@ module.exports = (req, res) => {
     const remaining = Math.max(0, data.callsLimit - data.callsUsed);
     const statusClass = data.status === 'active' ? 'badge-active' : data.status === 'pending' ? 'badge-pending' : data.status === 'cancelled' ? 'badge-cancelled' : 'badge-none';
     const dotClass = data.status === 'active' ? 'dot-green' : data.status === 'pending' ? 'dot-yellow' : 'dot-red';
+    const tok = token || '';
+    const shopEnc = encodeURIComponent(shop);
+
     const plansHtml = (data.plans || []).map(p => {
       const isActive = p.key === data.plan && data.status === 'active';
-      return \`<div class="plan-card \${isActive ? 'active' : ''} \${p.key === 'pro' ? 'popular' : ''}">
-        <div class="plan-name">\${p.name}</div>
-        <div class="plan-price">€\${p.price}<span>/mese</span></div>
-        <div class="plan-calls">\${p.calls} generazioni/mese</div>
-        <ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li></ul>
-        \${isActive ? '<div class="btn btn-active">Piano attuale</div>'
-          : '<a href="/api/billing?action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + p.key + '&token=' + encodeURIComponent(sessionStorage.getItem('trystyleai_token') || '') + '" class="btn btn-primary">' + (data.plan === 'none' ? 'Prova gratis ' + p.trialDays + ' giorni' : 'Passa a questo piano') + '</a><div class="trial-note">' + (data.plan === 'none' ? 'Poi €' + p.price + '/mese' : '') + '</div>'}
-      </div>\`;
+      const btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(tok);
+      return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
+        '<div class="plan-name">' + p.name + '</div>' +
+        '<div class="plan-price">€' + p.price + '<span>/mese</span></div>' +
+        '<div class="plan-calls">' + p.calls + ' generazioni/mese</div>' +
+        '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + (p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '') + '</ul>' +
+        (isActive
+          ? '<div class="btn btn-active">Piano attuale</div>'
+          : (data.noToken
+            ? '<div class="btn btn-active" style="background:#f1f2f4;color:#6d7175">Attiva sessione prima</div>'
+            : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a><div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
+          )
+        ) +
+      '</div>';
     }).join('');
-    document.getElementById('app').innerHTML = \`
-      <div class="status-banner">
-        <div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div><div style="font-weight:600">\${data.shop || shop}</div></div>
-        <div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div><div style="font-weight:600">\${data.planName || 'Nessun piano'}</div></div>
-        <div><span class="status-badge \${statusClass}"><span class="dot \${dotClass}"></span>\${data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano'}</span></div>
-      </div>
-      \${data.plan !== 'none' ? \`<div class="usage-card"><h2>Utilizzo questo mese</h2>
-        <div class="usage-numbers">
-          <div class="usage-stat"><div class="value">\${data.callsUsed}</div><div class="label">Usate</div></div>
-          <div class="usage-stat"><div class="value">\${remaining}</div><div class="label">Rimaste</div></div>
-          <div class="usage-stat"><div class="value">\${data.callsLimit}</div><div class="label">Totale</div></div>
-        </div>
-        <div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:\${pct}%"></div></div>
-        <div class="progress-label"><span>\${pct}% utilizzato</span><span>\${remaining} rimanenti</span></div></div>
-      </div>\` : ''}
-      <div class="section-title">\${data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano'}</div>
-      <div class="plans-grid">\${plansHtml}</div>
-    \`;
+
+    const reinstallAlert = data.noToken
+      ? '<div class="alert alert-warning">⚠️ Sessione scaduta. <a class="reinstall-btn" href="/api/install?shop=' + shopEnc + '">Riautentica l\'app</a></div>'
+      : '';
+
+    document.getElementById('app').innerHTML =
+      reinstallAlert +
+      '<div class="status-banner">' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div><div style="font-weight:600">' + (data.shop || shop) + '</div></div>' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div><div style="font-weight:600">' + (data.planName || 'Nessun piano') + '</div></div>' +
+        '<div><span class="status-badge ' + statusClass + '"><span class="dot ' + dotClass + '"></span>' + (data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano') + '</span></div>' +
+      '</div>' +
+      (data.plan !== 'none' && data.callsLimit > 0
+        ? '<div class="usage-card"><h2>Utilizzo questo mese</h2>' +
+          '<div class="usage-numbers">' +
+          '<div class="usage-stat"><div class="value">' + data.callsUsed + '</div><div class="label">Usate</div></div>' +
+          '<div class="usage-stat"><div class="value">' + remaining + '</div><div class="label">Rimaste</div></div>' +
+          '<div class="usage-stat"><div class="value">' + data.callsLimit + '</div><div class="label">Totale</div></div>' +
+          '</div>' +
+          '<div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="progress-label"><span>' + pct + '% utilizzato</span><span>' + remaining + ' rimanenti</span></div></div>' +
+          '</div>'
+        : '') +
+      '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
+      '<div class="plans-grid">' + plansHtml + '</div>';
   }
 
   loadDashboard();
