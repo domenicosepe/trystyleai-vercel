@@ -157,14 +157,23 @@
 
 <script>
   // Inizializza App Bridge
-  const AppBridge = window['app-bridge'];
-  const createApp = AppBridge.default;
-
+ <script>
   const urlParams = new URLSearchParams(window.location.search);
-  const params = new URLSearchParams(window.location.search);
-  const shop = params.get('shop') || sessionStorage.getItem('trystyleai_shop');
+  const host = urlParams.get('host');
+  
+  // Decodifica host per ottenere shop (host è base64 di "shop/admin")
+  let shop = urlParams.get('shop');
+  if (!shop && host) {
+    try {
+      const decoded = atob(host);
+      shop = decoded.split('/')[0];
+    } catch(e) {}
+  }
+  if (!shop) shop = sessionStorage.getItem('trystyleai_shop');
   if (shop) sessionStorage.setItem('trystyleai_shop', shop);
 
+  const AppBridge = window['app-bridge'];
+  const createApp = AppBridge.default;
   let appBridge;
   try {
     appBridge = createApp({
