@@ -116,7 +116,7 @@ module.exports = (req, res) => {
     }
     document.getElementById('app').innerHTML =
       '<div class="alert alert-warning">Sessione scaduta. ' +
-      '<a href="' + installUrl + '" class="reinstall-btn">Reinstalla l\'app</a></div>';
+      '<a href="' + installUrl + '" class="reinstall-btn">Reinstalla app</a></div>';
   }
 
   function loadDashboard() {
