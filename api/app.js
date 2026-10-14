@@ -11,7 +11,7 @@ module.exports = (req, res) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TryStyleAI</title>
-  <script src="https://unpkg.com/@shopify/app-bridge@3"></script>
+  <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f6f7; color: #202223; }
@@ -80,7 +80,6 @@ module.exports = (req, res) => {
   const urlParams = new URLSearchParams(window.location.search);
   const hostParam = urlParams.get('host') || '';
   let shop = urlParams.get('shop') || '';
-  let token = urlParams.get('token') || '';
 
   // Decodifica shop da host se manca
   if (!shop && hostParam) {
@@ -91,35 +90,36 @@ module.exports = (req, res) => {
   if (shop) sessionStorage.setItem('trystyleai_shop', shop);
   else shop = sessionStorage.getItem('trystyleai_shop') || '';
 
-  // Token: prima da URL, poi da cookie (impostato da install.js server-side)
-  if (!token) {
-    try {
-      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
-      const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
-      if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
-    } catch(e) {}
-  }
-
-  // App Bridge
-  const AppBridge = window['app-bridge'];
+  // App Bridge dalla CDN Shopify (obbligatorio per review)
   let appBridgeApp = null;
-  if (AppBridge && hostParam) {
-    try {
+  let getSessionToken = null;
+
+  try {
+    if (window['shopify'] && hostParam) {
+      // App Bridge v4 (nuovo, dalla CDN Shopify)
+      appBridgeApp = window['shopify'];
+      getSessionToken = async () => {
+        const { getSessionToken: gst } = await import('https://cdn.shopify.com/shopifycloud/app-bridge.js');
+        return gst(appBridgeApp);
+      };
+    } else if (window['app-bridge'] && hostParam) {
+      // App Bridge v3 fallback
+      const AppBridge = window['app-bridge'];
       appBridgeApp = AppBridge.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
-    } catch(e) {}
-  }
+      getSessionToken = () => AppBridge.actions.SessionToken.getSessionToken(appBridgeApp);
+    }
+  } catch(e) { console.warn('App Bridge init error:', e); }
 
   function redirectToInstall() {
     const installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
-    // App Bridge redirect nativo (top-level, fuori dall'iframe)
-    if (appBridgeApp) {
+    if (appBridgeApp && window['app-bridge']) {
       try {
+        const AppBridge = window['app-bridge'];
         const Redirect = AppBridge.actions.Redirect;
         Redirect.create(appBridgeApp).dispatch(Redirect.Action.REMOTE, installUrl);
         return;
       } catch(e) {}
     }
-    // Fallback: top-level redirect
     (window.top || window).location.href = installUrl;
   }
 
@@ -129,14 +129,30 @@ module.exports = (req, res) => {
       return;
     }
 
-    // Se non c'è token, redirect diretto all'install (flusso OAuth nativo Shopify)
-    if (!token) {
-      redirectToInstall();
-      return;
-    }
-
     try {
-      const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + '&token=' + encodeURIComponent(token));
+      // Ottieni session token da App Bridge (autenticazione ufficiale Shopify)
+      let sessionToken = null;
+      if (getSessionToken) {
+        try { sessionToken = await getSessionToken(); } catch(e) { console.warn('Session token error:', e); }
+      }
+
+      // Fallback: leggi token OAuth dal cookie (compatibilità backward)
+      let oauthToken = '';
+      if (!sessionToken) {
+        try {
+          const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
+          const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
+          if (match) oauthToken = decodeURIComponent(match.split('=').slice(1).join('='));
+        } catch(e) {}
+        if (!oauthToken) { redirectToInstall(); return; }
+      }
+
+      // Chiama billing con session token (preferito) o oauth token (fallback)
+      const authParam = sessionToken
+        ? '&session_token=' + encodeURIComponent(sessionToken)
+        : '&token=' + encodeURIComponent(oauthToken);
+
+      const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + authParam);
       if (!res.ok) throw new Error('Risposta ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);

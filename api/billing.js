@@ -17,7 +17,20 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, shop, plan } = req.query;
-  let { token } = req.query;
+  let { token, session_token } = req.query;
+
+  // Se arriva session_token (JWT da App Bridge), estrailo per ottenere il dest_shop
+  // e usa il token OAuth salvato nei metafield del negozio
+  if (!token && session_token && shop) {
+    // Il session_token è un JWT firmato da Shopify — il backend lo usa per verificare
+    // l'identità del negozio. Il vero access token OAuth è nel cookie.
+    try {
+      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
+      const cookies = req.headers.cookie || '';
+      const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
+      if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
+    } catch(e) {}
+  }
 
   // Se non c'è token in query, lo legge dal cookie
   if (!token && shop) {
@@ -69,7 +82,9 @@ module.exports = async (req, res) => {
       if (data?.userErrors?.length) return res.status(400).json({ error: data.userErrors[0].message });
       return res.redirect(data.confirmationUrl);
     } catch (err) {
-      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message });
+      const detail = err.response?.data || err.message;
+      console.error('Billing 403 detail:', JSON.stringify(detail));
+      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail });
     }
   }
 
