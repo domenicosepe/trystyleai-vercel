@@ -104,7 +104,7 @@ module.exports = (req, res) => {
 
   async function loadDashboard() {
     if (!shop) {
-      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Parametro shop mancante. Apri l\'app dall\'admin Shopify.</div>';
+      document.getElementById('app').innerHTML = '<div class="alert alert-danger">Parametro shop mancante. Apri l&#39;app dall&#39;admin Shopify.</div>';
       return;
     }
 
@@ -184,7 +184,7 @@ module.exports = (req, res) => {
     }).join('');
 
     const reinstallAlert = data.noToken
-      ? '<div class="alert alert-warning">⚠️ Sessione scaduta. <a class="reinstall-btn" href="/api/install?shop=' + shopEnc + '">Riautentica l\'app</a></div>'
+      ? '<div class="alert alert-warning">&#9888;&#65039; Sessione scaduta. <a class="reinstall-btn" href="/api/install?shop=' + shopEnc + '">Riautentica l&#39;app</a></div>'
       : '';
 
     document.getElementById('app').innerHTML =
