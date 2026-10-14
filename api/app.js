@@ -1,12 +1,12 @@
 // api/app.js — Dashboard embedded TryStyleAI
 module.exports = (req, res) => {
   const { shop, host } = req.query;
-  // NOTA: 'token' rimosso dai query params — ora usiamo session token via App Bridge v4
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com");
-  res.status(200).send(`<!DOCTYPE html>
+
+  const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8">
@@ -39,14 +39,14 @@ module.exports = (req, res) => {
     .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
     .plan-card { background: #fff; border: 2px solid #e1e3e5; border-radius: 12px; padding: 20px; position: relative; }
     .plan-card.active { border-color: #7b2ff7; }
-    .plan-card.popular::before { content: 'Più popolare'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #7b2ff7; color: white; font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 20px; }
+    .plan-card.popular::before { content: 'Piu popolare'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #7b2ff7; color: white; font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 20px; }
     .plan-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
     .plan-price { font-size: 28px; font-weight: 800; color: #7b2ff7; }
     .plan-price span { font-size: 14px; font-weight: 400; color: #6d7175; }
     .plan-calls { font-size: 13px; color: #6d7175; margin: 8px 0 16px; }
     .plan-features { list-style: none; margin-bottom: 20px; }
     .plan-features li { font-size: 13px; padding: 4px 0; color: #444; }
-    .plan-features li::before { content: '✓ '; color: #7b2ff7; font-weight: bold; }
+    .plan-features li::before { content: "v "; color: #7b2ff7; font-weight: bold; }
     .btn { display: block; width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; text-align: center; text-decoration: none; transition: opacity 0.2s; }
     .btn:hover { opacity: 0.85; }
     .btn-primary { background: #7b2ff7; color: white; }
@@ -63,7 +63,7 @@ module.exports = (req, res) => {
     .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
     .alert-warning { background: #fff3cd; border: 1px solid #ffc107; color: #856404; }
     .alert-danger { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-    .reinstall-btn { display: inline-block; margin-top: 12px; padding: 10px 20px; background: #7b2ff7; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; border: none; cursor: pointer; }
+    .reinstall-btn { display: inline-block; margin-top: 12px; padding: 10px 20px; background: #7b2ff7; color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -73,175 +73,153 @@ module.exports = (req, res) => {
 </div>
 <div class="container">
   <div id="app">
-    <div class="loading"><div class="spinner"></div>Caricamento...</div>
+    <div class="loading"><div class="spinner"></div><p>Caricamento...</p></div>
   </div>
 </div>
 <script>
-  // ── Parametri URL ──────────────────────────────────────────
-  const urlParams = new URLSearchParams(window.location.search);
-  const hostParam  = urlParams.get('host')     || '';
-  const idToken    = urlParams.get('id_token') || '';  // JWT da App Bridge v4
-  let   shop       = urlParams.get('shop')     || '';
+(function() {
+  var urlParams = new URLSearchParams(window.location.search);
+  var hostParam = urlParams.get('host') || '';
+  var idToken   = urlParams.get('id_token') || '';
+  var shop      = urlParams.get('shop') || '';
 
-  // Decodifica shop da host se manca
   if (!shop && hostParam) {
     try { shop = atob(hostParam).split('/')[0]; } catch(e) {}
   }
+  if (shop) { try { sessionStorage.setItem('trystyleai_shop', shop); } catch(e) {} }
+  else { try { shop = sessionStorage.getItem('trystyleai_shop') || ''; } catch(e) {} }
 
-  // Persistenza shop
-  if (shop) sessionStorage.setItem('trystyleai_shop', shop);
-  else      shop = sessionStorage.getItem('trystyleai_shop') || '';
-
-  // ── App Bridge v4 (CDN Shopify) ────────────────────────────
-  // Con App Bridge v4 il session token arriva già nell'URL come id_token.
-  // Usiamo window.shopify.idToken() per refresharlo quando scade.
-  let _sessionTokenFn = null;
-  if (window.shopify) {
-    _sessionTokenFn = () => window.shopify.idToken();
+  function getIdToken(cb) {
+    if (window.shopify && window.shopify.idToken) {
+      window.shopify.idToken().then(function(t) { cb(t); }).catch(function() {
+        cb(idToken || getCookieToken());
+      });
+      return;
+    }
+    cb(idToken || getCookieToken());
   }
 
-  async function getIdToken() {
-    // 1) prova App Bridge v4 globale
-    if (_sessionTokenFn) {
-      try { return await _sessionTokenFn(); } catch(e) {}
-    }
-    // 2) usa quello già nell'URL (primo caricamento)
-    if (idToken) return idToken;
-    // 3) leggi il token OAuth dal cookie (fallback install classico)
+  function getCookieToken() {
     try {
-      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
-      const match = document.cookie.split(';').map(c => c.trim())
-        .find(c => c.startsWith(cookieKey + '='));
+      var key = 'ts_token_' + shop.replace(/\./g, '_');
+      var match = document.cookie.split(';').map(function(c) { return c.trim(); })
+        .find(function(c) { return c.indexOf(key + '=') === 0; });
       if (match) return '__oauth__' + decodeURIComponent(match.split('=').slice(1).join('='));
     } catch(e) {}
     return null;
   }
 
-  // ── Redirect a install ─────────────────────────────────────
-  function redirectToInstall() {
-    const installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
-    // App Bridge v4
+  function showInstallLink() {
+    var installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
     if (window.shopify && window.shopify.navigate) {
       try { window.shopify.navigate(installUrl); return; } catch(e) {}
     }
-    // App Bridge v3 fallback
-    const AB = window['app-bridge'];
-    if (AB && hostParam) {
-      try {
-        const app3 = AB.default({ apiKey: '8cc69e33dd6444c334c764b246282af9', host: hostParam, forceRedirect: true });
-        AB.actions.Redirect.create(app3).dispatch(AB.actions.Redirect.Action.REMOTE, installUrl);
-        return;
-      } catch(e) {}
-    }
-    // Ultimo fallback — link visibile
     document.getElementById('app').innerHTML =
-      '<div class="alert alert-warning">Sessione scaduta. <a href="' + installUrl + '" class="reinstall-btn">Reinstalla l\'app</a></div>';
+      '<div class="alert alert-warning">Sessione scaduta. ' +
+      '<a href="' + installUrl + '" class="reinstall-btn">Reinstalla l\'app</a></div>';
   }
 
-  // ── Carica dashboard ───────────────────────────────────────
-  async function loadDashboard() {
+  function loadDashboard() {
     if (!shop) {
       document.getElementById('app').innerHTML =
-        '<div class="alert alert-danger">Parametro shop mancante. Apri l\'app dall\'admin Shopify.</div>';
+        '<div class="alert alert-danger">Parametro shop mancante.</div>';
       return;
     }
 
-    try {
-      const tok = await getIdToken();
-      if (!tok) { redirectToInstall(); return; }
+    getIdToken(function(tok) {
+      if (!tok) { showInstallLink(); return; }
 
-      // Determina se è un session JWT o un token OAuth
-      const isOAuth = tok.startsWith('__oauth__');
-      const authParam = isOAuth
+      var isOAuth = tok.indexOf('__oauth__') === 0;
+      var authParam = isOAuth
         ? '&token=' + encodeURIComponent(tok.slice(9))
         : '&session_token=' + encodeURIComponent(tok);
 
-      const res = await fetch('/api/billing?action=current&shop=' + encodeURIComponent(shop) + authParam);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      renderDashboard(data, tok, isOAuth);
-    } catch(err) {
-      console.error('Dashboard error:', err);
-      // Mostra dashboard con piani anche senza token (utente nuovo)
-      renderDashboard({
-        shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
-        callsUsed: 0, callsLimit: 0,
-        plans: [
-          { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
-          { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
-          { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
-        ]
-      }, '', false);
-    }
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/billing?action=current&shop=' + encodeURIComponent(shop) + authParam);
+      xhr.onload = function() {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.error) throw new Error(data.error);
+          renderDashboard(data, tok, isOAuth);
+        } catch(e) {
+          showFallback(tok, isOAuth);
+        }
+      };
+      xhr.onerror = function() { showFallback(tok, isOAuth); };
+      xhr.send();
+    });
   }
 
-  // ── Renderizza dashboard ───────────────────────────────────
+  function showFallback(tok, isOAuth) {
+    renderDashboard({
+      shop: shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
+      callsUsed: 0, callsLimit: 0,
+      plans: [
+        { key: 'basic',   name: 'TryStyleAI Basic',    price: 30,  calls: 80,  trialDays: 7 },
+        { key: 'pro',     name: 'TryStyleAI Pro',      price: 85,  calls: 250, trialDays: 7 },
+        { key: 'premium', name: 'TryStyleAI Business', price: 275, calls: 840, trialDays: 7 }
+      ]
+    }, tok, isOAuth);
+  }
+
   function renderDashboard(data, tok, isOAuth) {
-    const pct = data.callsLimit > 0 ? Math.min(100, Math.round(data.callsUsed / data.callsLimit * 100)) : 0;
-    const remaining = Math.max(0, data.callsLimit - data.callsUsed);
-    const statusClass = data.status === 'active' ? 'badge-active'
+    var pct = data.callsLimit > 0 ? Math.min(100, Math.round(data.callsUsed / data.callsLimit * 100)) : 0;
+    var remaining = Math.max(0, data.callsLimit - data.callsUsed);
+    var statusClass = data.status === 'active' ? 'badge-active'
       : data.status === 'pending' ? 'badge-pending'
-      : data.status === 'cancelled' ? 'badge-cancelled'
-      : 'badge-none';
-    const dotClass = data.status === 'active' ? 'dot-green'
-      : data.status === 'pending' ? 'dot-yellow'
-      : 'dot-red';
+      : data.status === 'cancelled' ? 'badge-cancelled' : 'badge-none';
+    var dotClass = data.status === 'active' ? 'dot-green'
+      : data.status === 'pending' ? 'dot-yellow' : 'dot-red';
+    var oauthTok = (isOAuth && tok) ? tok.slice(9) : '';
+    var shopEnc = encodeURIComponent(shop);
 
-    // oauthTok: se il tok è OAuth rimuove il prefisso __oauth__, altrimenti stringa vuota
-    // (per session token JWT non passiamo il tok nei link — billing lo riceve come session_token)
-    const oauthTok = (isOAuth && tok) ? tok.slice(9) : '';
-    const shopEnc = encodeURIComponent(shop);
-
-    const plansHtml = (data.plans || []).map(p => {
-      const isActive = p.key === data.plan && data.status === 'active';
-      // Se abbiamo un oauthTok lo usiamo, altrimenti il browser passerà il session_token via URL
-      const btnUrl = oauthTok
+    var plansHtml = (data.plans || []).map(function(p) {
+      var isActive = p.key === data.plan && data.status === 'active';
+      var btnUrl = oauthTok
         ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok)
         : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + (idToken ? '&session_token=' + encodeURIComponent(idToken) : '');
+      var extra = p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '';
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
         '<div class="plan-name">' + p.name + '</div>' +
-        '<div class="plan-price">€' + p.price + '<span>/mese</span></div>' +
+        '<div class="plan-price">EUR ' + p.price + '<span>/mese</span></div>' +
         '<div class="plan-calls">' + p.calls + ' generazioni/mese</div>' +
-        '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' +
-        (p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '') + '</ul>' +
+        '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + extra + '</ul>' +
         (isActive
           ? '<div class="btn btn-active">Piano attuale</div>'
           : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a>' +
-            '<div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
-        ) +
-      '</div>';
+            '<div class="trial-note">Poi EUR ' + p.price + '/mese - annulla quando vuoi</div>'
+        ) + '</div>';
     }).join('');
+
+    var usageHtml = (data.plan !== 'none' && data.callsLimit > 0)
+      ? '<div class="usage-card"><h2>Utilizzo questo mese</h2>' +
+        '<div class="usage-numbers">' +
+        '<div class="usage-stat"><div class="value">' + data.callsUsed + '</div><div class="label">Usate</div></div>' +
+        '<div class="usage-stat"><div class="value">' + remaining + '</div><div class="label">Rimaste</div></div>' +
+        '<div class="usage-stat"><div class="value">' + data.callsLimit + '</div><div class="label">Totale</div></div>' +
+        '</div><div class="progress-wrap"><div class="progress-bar">' +
+        '<div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="progress-label"><span>' + pct + '% utilizzato</span><span>' + remaining + ' rimanenti</span></div></div></div>'
+      : '';
+
+    var statusLabel = data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano';
 
     document.getElementById('app').innerHTML =
       '<div class="status-banner">' +
-        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div>' +
-        '<div style="font-weight:600">' + (data.shop || shop) + '</div></div>' +
-        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div>' +
-        '<div style="font-weight:600">' + (data.planName || 'Nessun piano') + '</div></div>' +
-        '<div><span class="status-badge ' + statusClass + '">' +
-          '<span class="dot ' + dotClass + '"></span>' +
-          (data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano') +
-        '</span></div>' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div><div style="font-weight:600">' + (data.shop || shop) + '</div></div>' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div><div style="font-weight:600">' + (data.planName || 'Nessun piano') + '</div></div>' +
+        '<div><span class="status-badge ' + statusClass + '"><span class="dot ' + dotClass + '"></span>' + statusLabel + '</span></div>' +
       '</div>' +
-      (data.plan !== 'none' && data.callsLimit > 0
-        ? '<div class="usage-card"><h2>Utilizzo questo mese</h2>' +
-          '<div class="usage-numbers">' +
-          '<div class="usage-stat"><div class="value">' + data.callsUsed + '</div><div class="label">Usate</div></div>' +
-          '<div class="usage-stat"><div class="value">' + remaining + '</div><div class="label">Rimaste</div></div>' +
-          '<div class="usage-stat"><div class="value">' + data.callsLimit + '</div><div class="label">Totale</div></div>' +
-          '</div>' +
-          '<div class="progress-wrap"><div class="progress-bar">' +
-          '<div class="progress-fill" style="width:' + pct + '%"></div></div>' +
-          '<div class="progress-label"><span>' + pct + '% utilizzato</span><span>' + remaining + ' rimanenti</span></div></div>' +
-          '</div>'
-        : '') +
+      usageHtml +
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
   }
 
   loadDashboard();
+})();
 </script>
 </body>
-</html>`);
+</html>`;
+
+  res.status(200).send(html);
 };
