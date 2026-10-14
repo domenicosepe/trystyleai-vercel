@@ -1,6 +1,7 @@
 // api/app.js — Dashboard embedded TryStyleAI
 module.exports = (req, res) => {
-  const { shop, token, host } = req.query;
+  const { shop, host } = req.query;
+  // NOTA: 'token' rimosso dai query params — ora usiamo session token via App Bridge v4
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Frame-Options', 'ALLOWALL');
@@ -93,21 +94,20 @@ module.exports = (req, res) => {
 
   // ── App Bridge v4 (CDN Shopify) ────────────────────────────
   // Con App Bridge v4 il session token arriva già nell'URL come id_token.
-  // Usiamo il modulo solo per refresharlo quando scade.
+  // Usiamo window.shopify.idToken() per refresharlo quando scade.
   let _sessionTokenFn = null;
   if (window.shopify) {
-    // App Bridge v4 globale iniettato da Shopify
     _sessionTokenFn = () => window.shopify.idToken();
   }
 
   async function getIdToken() {
-    // 1) prova App Bridge v4
+    // 1) prova App Bridge v4 globale
     if (_sessionTokenFn) {
       try { return await _sessionTokenFn(); } catch(e) {}
     }
     // 2) usa quello già nell'URL (primo caricamento)
     if (idToken) return idToken;
-    // 3) leggi il token OAuth dal cookie (fallback)
+    // 3) leggi il token OAuth dal cookie (fallback install classico)
     try {
       const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
       const match = document.cookie.split(';').map(c => c.trim())
@@ -117,7 +117,7 @@ module.exports = (req, res) => {
     return null;
   }
 
-  // ── Redirect a install (App Bridge v4) ────────────────────
+  // ── Redirect a install ─────────────────────────────────────
   function redirectToInstall() {
     const installUrl = 'https://trystyleai-vercel.vercel.app/api/install?shop=' + encodeURIComponent(shop);
     // App Bridge v4
@@ -133,7 +133,7 @@ module.exports = (req, res) => {
         return;
       } catch(e) {}
     }
-    // Ultimo fallback — usa un link visibile invece di navigare programmaticamente
+    // Ultimo fallback — link visibile
     document.getElementById('app').innerHTML =
       '<div class="alert alert-warning">Sessione scaduta. <a href="' + installUrl + '" class="reinstall-btn">Reinstalla l\'app</a></div>';
   }
@@ -163,6 +163,7 @@ module.exports = (req, res) => {
       renderDashboard(data, tok, isOAuth);
     } catch(err) {
       console.error('Dashboard error:', err);
+      // Mostra dashboard con piani anche senza token (utente nuovo)
       renderDashboard({
         shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
         callsUsed: 0, callsLimit: 0,
@@ -175,37 +176,53 @@ module.exports = (req, res) => {
     }
   }
 
+  // ── Renderizza dashboard ───────────────────────────────────
   function renderDashboard(data, tok, isOAuth) {
     const pct = data.callsLimit > 0 ? Math.min(100, Math.round(data.callsUsed / data.callsLimit * 100)) : 0;
     const remaining = Math.max(0, data.callsLimit - data.callsUsed);
-    const statusClass = data.status === 'active' ? 'badge-active' : data.status === 'pending' ? 'badge-pending' : data.status === 'cancelled' ? 'badge-cancelled' : 'badge-none';
-    const dotClass = data.status === 'active' ? 'dot-green' : data.status === 'pending' ? 'dot-yellow' : 'dot-red';
-    const oauthTok = (isOAuth && tok) ? tok.slice(9) : (tok || '');
+    const statusClass = data.status === 'active' ? 'badge-active'
+      : data.status === 'pending' ? 'badge-pending'
+      : data.status === 'cancelled' ? 'badge-cancelled'
+      : 'badge-none';
+    const dotClass = data.status === 'active' ? 'dot-green'
+      : data.status === 'pending' ? 'dot-yellow'
+      : 'dot-red';
+
+    // oauthTok: se il tok è OAuth rimuove il prefisso __oauth__, altrimenti stringa vuota
+    // (per session token JWT non passiamo il tok nei link — billing lo riceve come session_token)
+    const oauthTok = (isOAuth && tok) ? tok.slice(9) : '';
     const shopEnc = encodeURIComponent(shop);
 
     const plansHtml = (data.plans || []).map(p => {
       const isActive = p.key === data.plan && data.status === 'active';
-      const btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok);
+      // Se abbiamo un oauthTok lo usiamo, altrimenti il browser passerà il session_token via URL
+      const btnUrl = oauthTok
+        ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok)
+        : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + (idToken ? '&session_token=' + encodeURIComponent(idToken) : '');
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
         '<div class="plan-name">' + p.name + '</div>' +
         '<div class="plan-price">€' + p.price + '<span>/mese</span></div>' +
         '<div class="plan-calls">' + p.calls + ' generazioni/mese</div>' +
-        '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' + (p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '') + '</ul>' +
+        '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li>' +
+        (p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '') + '</ul>' +
         (isActive
           ? '<div class="btn btn-active">Piano attuale</div>'
-          : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a><div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
+          : '<a href="' + btnUrl + '" class="btn btn-primary">Prova gratis ' + p.trialDays + ' giorni</a>' +
+            '<div class="trial-note">Poi €' + p.price + '/mese · annulla quando vuoi</div>'
         ) +
       '</div>';
     }).join('');
 
-    const reinstallAlert = '';
-
     document.getElementById('app').innerHTML =
-      reinstallAlert +
       '<div class="status-banner">' +
-        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div><div style="font-weight:600">' + (data.shop || shop) + '</div></div>' +
-        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div><div style="font-weight:600">' + (data.planName || 'Nessun piano') + '</div></div>' +
-        '<div><span class="status-badge ' + statusClass + '"><span class="dot ' + dotClass + '"></span>' + (data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano') + '</span></div>' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Negozio</div>' +
+        '<div style="font-weight:600">' + (data.shop || shop) + '</div></div>' +
+        '<div><div style="font-size:13px;color:#6d7175;margin-bottom:4px">Piano</div>' +
+        '<div style="font-weight:600">' + (data.planName || 'Nessun piano') + '</div></div>' +
+        '<div><span class="status-badge ' + statusClass + '">' +
+          '<span class="dot ' + dotClass + '"></span>' +
+          (data.status === 'active' ? 'Attivo' : data.status === 'pending' ? 'In attesa' : 'Nessun piano') +
+        '</span></div>' +
       '</div>' +
       (data.plan !== 'none' && data.callsLimit > 0
         ? '<div class="usage-card"><h2>Utilizzo questo mese</h2>' +
@@ -214,13 +231,13 @@ module.exports = (req, res) => {
           '<div class="usage-stat"><div class="value">' + remaining + '</div><div class="label">Rimaste</div></div>' +
           '<div class="usage-stat"><div class="value">' + data.callsLimit + '</div><div class="label">Totale</div></div>' +
           '</div>' +
-          '<div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="progress-wrap"><div class="progress-bar">' +
+          '<div class="progress-fill" style="width:' + pct + '%"></div></div>' +
           '<div class="progress-label"><span>' + pct + '% utilizzato</span><span>' + remaining + ' rimanenti</span></div></div>' +
           '</div>'
         : '') +
       '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>' +
       '<div class="plans-grid">' + plansHtml + '</div>';
-
   }
 
   loadDashboard();
