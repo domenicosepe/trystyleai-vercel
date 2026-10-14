@@ -61,7 +61,8 @@ module.exports = async (req, res) => {
     }, { headers: { 'X-Shopify-Access-Token': accessToken } });
 
     // Redirect alla dashboard embedded
-    res.redirect(`https://${shop}/admin/apps/${API_KEY}`);
+    const host = Buffer.from(`${shop}/admin`).toString('base64');
+    res.redirect(`https://${shop}/admin/apps/${API_KEY}?host=${host}`);
   } catch (err) {
     console.error('Install error:', err.response?.data || err.message);
     res.status(500).send('Errore installazione');
