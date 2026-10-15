@@ -55,10 +55,14 @@ module.exports = async (req, res) => {
       }, { headers: { 'X-Shopify-Access-Token': accessToken } });
     } catch(e) {}
 
-    // Salva token in cookie httpOnly (server-side, non dipende da sessionStorage/iframe)
+    // Salva token in cookie (SameSite=None per iframe cross-origin, non HttpOnly per JS fallback)
     const host = Buffer.from(`${shop}/admin`).toString('base64');
-    res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=86400`);
-    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}&token=${encodeURIComponent(accessToken)}`);
+    res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=604800`);
+    // Redirect alla nostra app con il token nell'URL — App Bridge lo legge e lo usa per session token exchange
+    // NOTA: non passiamo il token a admin.shopify.com perché lo ignora.
+    // Passiamo il token alla nostra app (app.js) che lo salva in sessionStorage per il reload iniziale.
+    // Per i reload successivi, billing.js usa il session token JWT (App Bridge) per il token exchange.
+    return res.redirect(`${APP_URL}/api/app?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}&token=${encodeURIComponent(accessToken)}`);
 
   } catch (err) {
     console.error('Install error:', err.response?.data || err.message);

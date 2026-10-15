@@ -176,16 +176,25 @@ module.exports = (req, res) => {
       : data.status === 'cancelled' ? 'badge-cancelled' : 'badge-none';
     var dotClass = data.status === 'active' ? 'dot-green'
       : data.status === 'pending' ? 'dot-yellow' : 'dot-red';
+    // tok può essere: session token JWT (da App Bridge) o oauth token (__oauth__...)
     var oauthTok = (isOAuth && tok) ? tok.slice(9) : '';
+    // sessionJwt è il token JWT di App Bridge — lo passiamo a billing per il token exchange server-side
+    var sessionJwt = (!isOAuth && tok) ? tok : '';
     var shopEnc = encodeURIComponent(shop);
 
     var plansHtml = (data.plans || []).map(function(p) {
       var isActive = p.key === data.plan && data.status === 'active';
-      var cookieTok = getCookieToken();
-      var realTok = oauthTok || savedToken || (cookieTok ? cookieTok.slice(9) : '');
-      var btnUrl = realTok
-        ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(realTok)
-        : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key;
+      var btnUrl;
+      if (oauthTok) {
+        // Abbiamo il token OAuth direttamente (raro — solo se arriva da cookie)
+        btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok);
+      } else if (sessionJwt) {
+        // Usiamo il session token JWT — billing.js lo scambia server-side con il token OAuth
+        btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&session_token=' + encodeURIComponent(sessionJwt);
+      } else {
+        // Nessun token disponibile — billing reindirizza a install
+        btnUrl = '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key;
+      }
       var extra = p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '';
       var planKey = p.key;
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +
