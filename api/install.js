@@ -7,6 +7,20 @@ const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
 const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields,read_orders';
 
+// Salva token su Upstash Redis (REST API, nessuna libreria extra)
+async function kvSet(key, value) {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) { console.log('KV non configurato'); return; }
+  try {
+    await axios.post(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}`,
+      {}, { headers: { Authorization: `Bearer ${token}` } });
+    console.log('KV set OK:', key);
+  } catch(e) {
+    console.log('KV set errore:', e.response?.data || e.message);
+  }
+}
+
 module.exports = async (req, res) => {
   const { shop, code, hmac, state } = req.query;
 
@@ -38,8 +52,12 @@ module.exports = async (req, res) => {
       code
     });
     const accessToken = tokenRes.data.access_token;
+    console.log('Install OK per shop:', shop, '- token type:', tokenRes.data.token_type || 'unknown');
 
-    // Salva access token come metafield del negozio
+    // Salva token su Upstash KV — questa è la fonte di verità per billing
+    await kvSet('token:' + shop, accessToken);
+
+    // Salva anche nei metafield come backup
     await setMetafield(shop, accessToken, 'access_token', accessToken);
 
     // Inizializza contatori (solo se non esistono già)
@@ -55,15 +73,9 @@ module.exports = async (req, res) => {
       }, { headers: { 'X-Shopify-Access-Token': accessToken } });
     } catch(e) {}
 
-    // Salva token in cookie — ma il token exchange server-side è il meccanismo principale
-    // Il cookie serve solo come debug/fallback per action=current
-    const host = Buffer.from(`${shop}/admin`).toString('base64');
-    res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=604800`);
-    // Redirect alla nostra app con il token nell'URL — App Bridge lo legge e lo usa per session token exchange
-    // NOTA: non passiamo il token a admin.shopify.com perché lo ignora.
-    // Passiamo il token alla nostra app (app.js) che lo salva in sessionStorage per il reload iniziale.
-    // Per i reload successivi, billing.js usa il session token JWT (App Bridge) per il token exchange.
-    return res.redirect(`${APP_URL}/api/app?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host)}&token=${encodeURIComponent(accessToken)}`);
+    // Redirect all'admin Shopify — il token è salvato su KV, non serve passarlo nell'URL
+    const shopName = shop.replace('.myshopify.com', '');
+    return res.redirect(`https://admin.shopify.com/store/${shopName}/apps/trystyleai`);
 
   } catch (err) {
     console.error('Install error:', err.response?.data || err.message);
@@ -73,7 +85,6 @@ module.exports = async (req, res) => {
 
 async function setMetafield(shop, token, key, value) {
   try {
-    // Prima cerca se esiste già
     const r = await axios.get(
       `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
       { headers: { 'X-Shopify-Access-Token': token } }

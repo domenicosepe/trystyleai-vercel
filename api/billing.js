@@ -1,9 +1,6 @@
 // api/billing.js — Shopify Billing API
 const axios = require('axios');
-const crypto = require('crypto');
 
-const API_KEY = process.env.SHOPIFY_API_KEY;
-const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
 
 const PLANS = {
@@ -12,80 +9,19 @@ const PLANS = {
   premium: { name: 'TryStyleAI Business', price: 275.00, calls: 840, trialDays: 7 }
 };
 
-// Decodifica JWT session token (App Bridge) — solo base64, non serve verificare la firma per estrarre il shop
-function decodeSessionToken(jwt) {
+// Legge token da Upstash KV
+async function kvGet(key) {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
   try {
-    const parts = jwt.split('.');
-    if (parts.length !== 3) return null;
-    const payload = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-    return JSON.parse(payload);
+    const r = await axios.get(`${url}/get/${encodeURIComponent(key)}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+    return r.data.result || null;
   } catch(e) {
+    console.log('KV get errore:', e.response?.data || e.message);
     return null;
   }
-}
-
-// Verifica HMAC del session token con il secret dell'app
-function verifySessionToken(jwt) {
-  try {
-    if (!API_SECRET) return false;
-    const parts = jwt.split('.');
-    if (parts.length !== 3) return false;
-    const msg = parts[0] + '.' + parts[1];
-    const sig = Buffer.from(parts[2].replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    const expected = crypto.createHmac('sha256', API_SECRET).update(msg).digest();
-    return crypto.timingSafeEqual(sig, expected);
-  } catch(e) {
-    return false;
-  }
-}
-
-// Recupera il token OAuth dai metafield del negozio usando le credenziali dell'app
-// Questo funziona perché il token è stato salvato come metafield durante l'install
-// e lo recuperiamo usando il token stesso (che abbiamo salvato come metafield access_token)
-async function getTokenFromMetafield(shop) {
-  // Non possiamo leggere metafield senza token — questa funzione è un no-op
-  // Il token viene sempre passato dal frontend o dal session_token exchange
-  return null;
-}
-
-// Recupera il token OAuth tramite token exchange con Shopify
-// Il session token JWT è firmato da Shopify — lo usiamo per ottenere un token offline
-async function getOAuthTokenViaSessionToken(sessionJwt, shop) {
-  if (!sessionJwt) return null;
-
-  // Decodifica il JWT per ottenere il shop dal claim 'dest' (senza verificare la firma — Shopify la verifica nell'exchange)
-  const claims = decodeSessionToken(sessionJwt);
-  // Il claim 'dest' contiene l'URL del negozio, es: "https://checkout-rapido-test.myshopify.com"
-  const destShop = (claims?.dest ? claims.dest.replace('https://', '') : shop) || shop;
-  if (!destShop) return null;
-
-  // Recupera il token OAuth dal metafield access_token del negozio
-  // Per farlo ci serve già un token — usiamo l'online token exchange di Shopify
-  // Shopify permette di scambiare un session token con un token online usando le credenziali dell'app
-  try {
-    console.log('Token exchange → shop:', destShop, 'API_KEY presente:', !!API_KEY, 'API_SECRET presente:', !!API_SECRET);
-    const r = await axios.post(
-      `https://${destShop}/admin/oauth/access_token`,
-      {
-        client_id: API_KEY,
-        client_secret: API_SECRET,
-        subject_token: sessionJwt,
-        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
-      }
-    );
-    console.log('Token exchange risposta:', JSON.stringify(r.data));
-    if (r.data.access_token) {
-      return r.data.access_token;
-    }
-  } catch(e) {
-    const errData = e.response?.data;
-    const status = e.response?.status;
-    console.log('Token exchange fallito status:', status, 'errore:', JSON.stringify(errData));
-  }
-
-  return null;
 }
 
 module.exports = async (req, res) => {
@@ -95,29 +31,17 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, shop, plan } = req.query;
-  let { token, session_token } = req.query;
+  let { token } = req.query;
 
-  // Se arriva session_token (JWT da App Bridge), esegui SEMPRE il token exchange
-  // NON usare il cookie come fallback — potrebbe contenere un token vecchio non-expiring
-  if (session_token && shop) {
-    console.log('Eseguo token exchange per shop:', shop);
-    const exchanged = await getOAuthTokenViaSessionToken(session_token, shop);
-    if (exchanged) {
-      console.log('Token exchange OK, token ottenuto');
-      token = exchanged;
+  // Se non arriva token in query, lo legge da KV usando lo shop
+  if (!token && shop) {
+    console.log('Cerco token su KV per shop:', shop);
+    token = await kvGet('token:' + shop);
+    if (token) {
+      console.log('Token trovato su KV');
     } else {
-      console.log('Token exchange fallito, nessun token disponibile');
-      token = null; // forza redirect a install
+      console.log('Token NON trovato su KV');
     }
-  }
-
-  // Solo se non c'è session_token e non c'è token in query, prova il cookie
-  // (questo path viene usato solo per action=current dalla dashboard, non per subscribe)
-  if (!token && !session_token && shop) {
-    const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
-    const cookies = req.headers.cookie || '';
-    const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
-    if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
   }
 
   // ── Crea abbonamento ──────────────────────────────────────
@@ -126,7 +50,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Parametri non validi' });
     }
     if (!token) {
-      // Nessun token OAuth — reindirizza all'installazione OAuth
       const installUrl = `${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`;
       return res.redirect(installUrl);
     }
@@ -167,7 +90,7 @@ module.exports = async (req, res) => {
       return res.redirect(data.confirmationUrl);
     } catch (err) {
       const detail = err.response?.data || err.message;
-      console.error('Billing error detail:', JSON.stringify(detail));
+      console.error('Billing error:', JSON.stringify(detail));
       return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail });
     }
   }
@@ -186,22 +109,17 @@ module.exports = async (req, res) => {
       console.error('Confirm error:', err.message);
     }
     const host = Buffer.from(`${shop}/admin`).toString('base64');
-    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&token=${encodeURIComponent(token)}&host=${host}`);
+    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}`);
   }
 
   // ── Info piano corrente ───────────────────────────────────
   if (action === 'current') {
     if (!shop) return res.status(400).json({ error: 'Shop mancante' });
 
-    // Se ancora non c'è token, risponde con stato "no plan" invece di errore
     if (!token) {
       return res.json({
-        shop,
-        plan: 'none',
-        planName: 'Nessun piano',
-        status: 'pending',
-        callsUsed: 0,
-        callsLimit: 0,
+        shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
+        callsUsed: 0, callsLimit: 0,
         plans: Object.entries(PLANS).map(([key, pl]) => ({
           key, name: pl.name, price: pl.price, calls: pl.calls, trialDays: pl.trialDays
         }))
