@@ -79,15 +79,21 @@ module.exports = (req, res) => {
 <script>
 (function() {
   var urlParams = new URLSearchParams(window.location.search);
-  var hostParam = urlParams.get('host') || '';
-  var idToken   = urlParams.get('id_token') || '';
-  var shop      = urlParams.get('shop') || '';
+  var hostParam  = urlParams.get('host') || '';
+  var idToken    = urlParams.get('id_token') || '';
+  var shop       = urlParams.get('shop') || '';
+  var urlToken   = urlParams.get('token') || '';
 
   if (!shop && hostParam) {
     try { shop = atob(hostParam).split('/')[0]; } catch(e) {}
   }
   if (shop) { try { sessionStorage.setItem('trystyleai_shop', shop); } catch(e) {} }
   else { try { shop = sessionStorage.getItem('trystyleai_shop') || ''; } catch(e) {} }
+
+  // Salva token OAuth in sessionStorage se arriva dall'URL (post-install)
+  if (urlToken) { try { sessionStorage.setItem('trystyleai_token_' + shop, urlToken); } catch(e) {} }
+  var savedToken = '';
+  try { savedToken = sessionStorage.getItem('trystyleai_token_' + shop) || ''; } catch(e) {}
 
   function getIdToken(cb) {
     if (window.shopify && window.shopify.idToken) {
@@ -176,7 +182,7 @@ module.exports = (req, res) => {
     var plansHtml = (data.plans || []).map(function(p) {
       var isActive = p.key === data.plan && data.status === 'active';
       var cookieTok = getCookieToken();
-      var realTok = oauthTok || (cookieTok ? cookieTok.slice(9) : '');
+      var realTok = oauthTok || savedToken || (cookieTok ? cookieTok.slice(9) : '');
       var btnUrl = realTok
         ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(realTok)
         : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key;
