@@ -15,8 +15,10 @@ async function kvGet(key) {
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   try {
-    const r = await axios.get(`${url}/get/${encodeURIComponent(key)}`,
-      { headers: { Authorization: `Bearer ${token}` } });
+    // Upstash REST: POST con comando come array JSON
+    const r = await axios.post(`${url}`,
+      ['GET', key],
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
     return r.data.result || null;
   } catch(e) {
     console.log('KV get errore:', e.response?.data || e.message);
