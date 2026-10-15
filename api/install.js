@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
     // Salva token in cookie httpOnly (server-side, non dipende da sessionStorage/iframe)
     const host = Buffer.from(`${shop}/admin`).toString('base64');
     res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=86400`);
-    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}`);
+    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}&token=${encodeURIComponent(accessToken)}`);
 
   } catch (err) {
     console.error('Install error:', err.response?.data || err.message);
