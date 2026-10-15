@@ -175,9 +175,11 @@ module.exports = (req, res) => {
 
     var plansHtml = (data.plans || []).map(function(p) {
       var isActive = p.key === data.plan && data.status === 'active';
-      var btnUrl = oauthTok
-        ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(oauthTok)
-        : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + (idToken ? '&session_token=' + encodeURIComponent(idToken) : '');
+      var cookieTok = getCookieToken();
+      var realTok = oauthTok || (cookieTok ? cookieTok.slice(9) : '');
+      var btnUrl = realTok
+        ? '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key + '&token=' + encodeURIComponent(realTok)
+        : '/api/billing?action=subscribe&shop=' + shopEnc + '&plan=' + p.key;
       var extra = p.key !== 'basic' ? '<li>Supporto prioritario</li>' : '';
       var planKey = p.key;
       return '<div class="plan-card ' + (isActive ? 'active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">' +

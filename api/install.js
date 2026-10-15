@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
     }
     const nonce = crypto.randomBytes(16).toString('hex');
     const redirectUri = `${APP_URL}/api/install`;
-    const url = `https://${shop}/admin/oauth/authorize?client_id=${API_KEY}&scope=${SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
+    const url = `https://${shop}/admin/oauth/authorize?client_id=${API_KEY}&scope=${SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}&grant_options[]=offline`;
     return res.redirect(url);
   }
 
@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
 
     // Salva token in cookie httpOnly (server-side, non dipende da sessionStorage/iframe)
     const host = Buffer.from(`${shop}/admin`).toString('base64');
-    res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=86400`);
+    res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=86400`);
     return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}`);
 
   } catch (err) {
