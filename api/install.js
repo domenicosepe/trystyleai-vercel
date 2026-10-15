@@ -55,7 +55,8 @@ module.exports = async (req, res) => {
       }, { headers: { 'X-Shopify-Access-Token': accessToken } });
     } catch(e) {}
 
-    // Salva token in cookie (SameSite=None per iframe cross-origin, non HttpOnly per JS fallback)
+    // Salva token in cookie — ma il token exchange server-side è il meccanismo principale
+    // Il cookie serve solo come debug/fallback per action=current
     const host = Buffer.from(`${shop}/admin`).toString('base64');
     res.setHeader('Set-Cookie', `ts_token_${shop.replace(/\./g,'_')}=${encodeURIComponent(accessToken)}; Path=/; SameSite=None; Secure; Max-Age=604800`);
     // Redirect alla nostra app con il token nell'URL — App Bridge lo legge e lo usa per session token exchange

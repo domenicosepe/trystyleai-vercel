@@ -63,6 +63,7 @@ async function getOAuthTokenViaSessionToken(sessionJwt, shop) {
   // Per farlo ci serve già un token — usiamo l'online token exchange di Shopify
   // Shopify permette di scambiare un session token con un token online usando le credenziali dell'app
   try {
+    console.log('Token exchange → shop:', destShop, 'API_KEY presente:', !!API_KEY, 'API_SECRET presente:', !!API_SECRET);
     const r = await axios.post(
       `https://${destShop}/admin/oauth/access_token`,
       {
@@ -74,12 +75,14 @@ async function getOAuthTokenViaSessionToken(sessionJwt, shop) {
         requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
       }
     );
+    console.log('Token exchange risposta:', JSON.stringify(r.data));
     if (r.data.access_token) {
       return r.data.access_token;
     }
   } catch(e) {
     const errData = e.response?.data;
-    console.log('Token exchange fallito:', JSON.stringify(errData));
+    const status = e.response?.status;
+    console.log('Token exchange fallito status:', status, 'errore:', JSON.stringify(errData));
   }
 
   return null;
@@ -94,22 +97,23 @@ module.exports = async (req, res) => {
   const { action, shop, plan } = req.query;
   let { token, session_token } = req.query;
 
-  // Se arriva session_token (JWT da App Bridge), esegui token exchange per ottenere l'OAuth token
-  if (!token && session_token && shop) {
+  // Se arriva session_token (JWT da App Bridge), esegui SEMPRE il token exchange
+  // NON usare il cookie come fallback — potrebbe contenere un token vecchio non-expiring
+  if (session_token && shop) {
+    console.log('Eseguo token exchange per shop:', shop);
     const exchanged = await getOAuthTokenViaSessionToken(session_token, shop);
     if (exchanged) {
+      console.log('Token exchange OK, token ottenuto');
       token = exchanged;
     } else {
-      // Fallback: prova a leggere token dal cookie (funziona solo se non siamo in iframe cross-origin)
-      const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
-      const cookies = req.headers.cookie || '';
-      const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
-      if (match) token = decodeURIComponent(match.split('=').slice(1).join('='));
+      console.log('Token exchange fallito, nessun token disponibile');
+      token = null; // forza redirect a install
     }
   }
 
-  // Se c'è solo session_token senza token OAuth, prova cookie come ultimo fallback
-  if (!token && shop) {
+  // Solo se non c'è session_token e non c'è token in query, prova il cookie
+  // (questo path viene usato solo per action=current dalla dashboard, non per subscribe)
+  if (!token && !session_token && shop) {
     const cookieKey = 'ts_token_' + shop.replace(/\./g, '_');
     const cookies = req.headers.cookie || '';
     const match = cookies.split(';').map(c => c.trim()).find(c => c.startsWith(cookieKey + '='));
