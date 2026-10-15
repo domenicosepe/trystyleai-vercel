@@ -221,9 +221,8 @@ module.exports = (req, res) => {
     if (!btn) return;
     var url = btn.getAttribute('data-url');
     if (!url) return;
-    if (window.shopify && window.shopify.navigate) {
-      window.shopify.navigate(url);
-    } else if (window.top) {
+    // Per OAuth Shopify serve navigare nel top frame, non dentro l'admin embed
+    if (window.top && window.top !== window) {
       window.top.location.href = url;
     } else {
       window.location.href = url;
