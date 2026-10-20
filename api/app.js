@@ -234,11 +234,19 @@ module.exports = (req, res) => {
     if (!planKey) return;
     btn.disabled = true;
     btn.textContent = 'Attendi...';
-    getToken(function(freshTok) {
-      var url = '/api/billing?action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey;
-      if (freshTok) url += '&session_token=' + encodeURIComponent(freshTok);
+
+    function doSubscribe(tok) {
+      if (!tok) {
+        alert('Sessione scaduta. Ricarica la pagina e riprova.');
+        btn.disabled = false; btn.textContent = 'Prova gratis';
+        return;
+      }
+      var url = '/api/billing?action=subscribe&shop=' + encodeURIComponent(shop)
+        + '&plan=' + planKey
+        + '&session_token=' + encodeURIComponent(tok);
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url);
+      xhr.timeout = 15000;
       xhr.onload = function() {
         try {
           var d = JSON.parse(xhr.responseText);
@@ -249,11 +257,28 @@ module.exports = (req, res) => {
             alert('Errore: ' + (d.error || 'Risposta non valida'));
             btn.disabled = false; btn.textContent = 'Prova gratis';
           }
-        } catch(err) { alert('Errore imprevisto'); btn.disabled = false; btn.textContent = 'Prova gratis'; }
+        } catch(err) {
+          alert('Errore imprevisto');
+          btn.disabled = false; btn.textContent = 'Prova gratis';
+        }
       };
+      xhr.ontimeout = function() { alert('Timeout. Riprova.'); btn.disabled = false; btn.textContent = 'Prova gratis'; };
       xhr.onerror = function() { alert('Errore di rete'); btn.disabled = false; btn.textContent = 'Prova gratis'; };
       xhr.send();
-    });
+    }
+
+    // Per subscribe serve sempre un token fresco — timeout 8s
+    if (window.shopify && window.shopify.idToken) {
+      var tDone = false;
+      var tTimer = setTimeout(function() {
+        if (!tDone) { tDone = true; doSubscribe(''); }
+      }, 8000);
+      window.shopify.idToken()
+        .then(function(t) { if (!tDone) { tDone = true; clearTimeout(tTimer); doSubscribe(t); } })
+        .catch(function() { if (!tDone) { tDone = true; clearTimeout(tTimer); doSubscribe(''); } });
+    } else {
+      doSubscribe('');
+    }
   });
 
   // ── WIDGET CONFIG ──────────────────────────────────────────

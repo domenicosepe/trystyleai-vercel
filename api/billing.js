@@ -236,13 +236,15 @@ module.exports = async (req, res) => {
     const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}`;
 
     // Versione API 2025-01 — supporta expiring offline tokens
+    // test: true solo se BILLING_TEST=true nelle env var (non in produzione!)
+    const testFlag = process.env.BILLING_TEST === 'true' ? '\n          test: true' : '';
+
     const mutation = `
       mutation {
         appSubscriptionCreate(
           name: "${p.name}"
           returnUrl: "${returnUrl}"
-          trialDays: ${p.trialDays}
-          test: true
+          trialDays: ${p.trialDays}${testFlag}
           lineItems: [{
             plan: {
               appRecurringPricingDetails: {
