@@ -127,6 +127,30 @@ module.exports = async (req, res) => {
 
   const { action, shop, plan, session_token } = req.query;
 
+  // ── Endpoint debug ────────────────────────────────────────
+  if (action === 'debug') {
+    const result = { shop, session_token_length: session_token ? session_token.length : 0, api_key_present: !!API_KEY, api_secret_present: !!API_SECRET };
+    if (session_token) {
+      try {
+        const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+          client_id: API_KEY, client_secret: API_SECRET,
+          subject_token: session_token,
+          subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+          grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+          requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+        });
+        result.exchange_ok = true;
+        result.token_prefix = r.data.access_token ? r.data.access_token.substring(0, 10) : 'none';
+        result.response = r.data;
+      } catch(e) {
+        result.exchange_ok = false;
+        result.exchange_status = e.response?.status;
+        result.exchange_error = e.response?.data;
+      }
+    }
+    return res.json(result);
+  }
+
   if (!shop) return res.status(400).json({ error: 'Shop mancante' });
 
   // Log diagnostico
