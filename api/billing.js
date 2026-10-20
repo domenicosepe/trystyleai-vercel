@@ -64,6 +64,8 @@ async function tokenExchange(sessionJwt, shop) {
     const t = r.data.access_token;
     if (t) {
       console.log('Token exchange OK per shop:', shop);
+      console.log('Token exchange scope:', r.data.scope || 'non presente');
+      console.log('Token exchange token_type:', r.data.token_type || 'non presente');
       return t;
     }
     console.log('Token exchange: risposta senza access_token:', JSON.stringify(r.data));
@@ -270,7 +272,9 @@ module.exports = async (req, res) => {
       return res.json({ confirmationUrl: data.confirmationUrl });
     } catch (err) {
       const detail = err.response?.data || err.message;
-      console.error('Billing error:', JSON.stringify(detail));
+      console.error('Billing error status:', err.response?.status);
+      console.error('Billing error headers:', JSON.stringify(err.response?.headers || {}));
+      console.error('Billing error body:', JSON.stringify(detail));
       const _debug2 = { ..._debug, token_prefix: token ? token.substring(0, 15) : 'null' };
       return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail, _debug: _debug2 });
     }
