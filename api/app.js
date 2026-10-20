@@ -253,8 +253,7 @@ module.exports = (req, res) => {
       }
 
       var xhr = new XMLHttpRequest();
-      // Usiamo POST per evitare che il session_token venga loggato/strippato
-      xhr.open('POST', '/api/billing?' + params);
+      xhr.open('GET', '/api/billing?' + params);
       xhr.onload = function() {
         try {
           var data = JSON.parse(xhr.responseText);
