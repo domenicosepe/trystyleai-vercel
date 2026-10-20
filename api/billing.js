@@ -268,8 +268,12 @@ module.exports = async (req, res) => {
       );
       const data = r.data.data?.appSubscriptionCreate;
       if (data?.userErrors?.length) {
-        console.log('userErrors:', data.userErrors);
-        return res.status(400).json({ error: data.userErrors[0].message });
+        console.log('userErrors FULL:', JSON.stringify(data.userErrors));
+        return res.status(400).json({ error: data.userErrors[0].message, userErrors: data.userErrors, _debug });
+      }
+      if (!data) {
+        console.log('GraphQL response completa:', JSON.stringify(r.data));
+        return res.status(500).json({ error: 'Risposta GraphQL vuota', graphql_response: r.data, _debug });
       }
       console.log('Subscription creata, confirmationUrl:', data.confirmationUrl);
       // Ritorna JSON con confirmationUrl — il frontend fa il redirect top-frame
