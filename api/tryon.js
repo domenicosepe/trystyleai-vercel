@@ -86,9 +86,12 @@ module.exports = async (req, res) => {
     }
 
     const fashnRes = await axios.post(`${FASHN_URL}/run`, {
-      model_image,
-      garment_image,
-      category: ['tops', 'bottoms', 'one-pieces'].includes(category) ? category : 'tops'
+      model_name: 'tryon-v1.6',
+      inputs: {
+        model_image,
+        garment_image,
+        category: ['auto', 'tops', 'bottoms', 'one-pieces'].includes(category) ? category : 'auto'
+      }
     }, {
       headers: { Authorization: `Bearer ${FASHN_API_KEY}` }
     });

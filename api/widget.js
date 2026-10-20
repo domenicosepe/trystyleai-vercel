@@ -164,7 +164,7 @@ function widgetMain(APP, SHOP_PARAM) {
     var t = ((product.type || '') + ' ' + (product.title || '') + ' ' + (product.tags || []).join(' ')).toLowerCase();
     if (/(abito|vestit|dress|tuta|jumpsuit|salopette|completo)/.test(t)) return 'one-pieces';
     if (/(pantalon|jeans|gonna|short|bermuda|leggings|pants|trouser|skirt|jogger)/.test(t)) return 'bottoms';
-    return 'tops';
+    return 'auto';
   }
 
   function esc(s) {
