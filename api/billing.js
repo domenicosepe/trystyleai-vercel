@@ -411,7 +411,11 @@ module.exports = async (req, res) => {
               meta.calls_limit = String(PLANS[activeKey].calls);
             }
             meta.subId = active.id;
-          } else if (meta.status === 'active') {
+            await kvSet('sub:' + shop, JSON.stringify({ status: 'ACTIVE', plan: activeKey, calls: PLANS[activeKey].calls, id: active.id, at: new Date().toISOString() }));
+          } else if (meta.status === 'active' || !active) {
+            await kvSet('sub:' + shop, JSON.stringify({ status: 'NONE', plan: 'none', calls: 0, id: null, at: new Date().toISOString() }));
+          }
+          if (!activeKey && meta.status === 'active') {
             // Nessun abbonamento attivo su Shopify → disattiva
             await updateMeta(shop, token, 'status', 'cancelled');
             await updateMeta(shop, token, 'plan', 'none');

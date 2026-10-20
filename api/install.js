@@ -74,22 +74,8 @@ module.exports = async (req, res) => {
       }, { headers: { 'X-Shopify-Access-Token': accessToken } });
     } catch(e) {}
 
-    // Registra webhook GDPR obbligatori
-    const webhookTopics = [
-      'customers/data_request',
-      'customers/redact',
-      'shop/redact'
-    ];
-    for (const topic of webhookTopics) {
-      try {
-        await axios.post(`https://${shop}/admin/api/2025-01/webhooks.json`, {
-          webhook: { topic, address: `${APP_URL}/api/webhooks`, format: 'json' }
-        }, { headers: { 'X-Shopify-Access-Token': accessToken } });
-        console.log('Webhook registrato:', topic);
-      } catch(e) {
-        console.log('Webhook già esistente o errore:', topic, e.response?.data?.errors || e.message);
-      }
-    }
+    // I webhook (GDPR, app/uninstalled, app_subscriptions/update) sono dichiarati in
+    // shopify.app.toml: i topic di conformità non si possono registrare via API.
 
     // Redirect all'admin Shopify — il token è salvato su KV, non serve passarlo nell'URL
     const shopName = shop.replace('.myshopify.com', '');

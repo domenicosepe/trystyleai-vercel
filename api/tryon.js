@@ -75,7 +75,10 @@ module.exports = async (req, res) => {
   try {
     const meta = await getMetafields(shop, token);
 
-    if (meta.status !== 'active') {
+    const subRaw = await kvGet('sub:' + shop);
+    let sub = null;
+    try { sub = typeof subRaw === 'string' ? JSON.parse(subRaw) : subRaw; } catch (e) {}
+    if ((sub && sub.status && sub.status !== 'ACTIVE') || meta.status !== 'active') {
       return res.status(403).json({ error: 'Prova virtuale non disponibile al momento.' });
     }
 

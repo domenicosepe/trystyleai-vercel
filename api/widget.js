@@ -42,6 +42,12 @@ async function getMeta(shop, token) {
   return result;
 }
 
+function parseSub(v) {
+  if (!v) return null;
+  if (typeof v === 'object') return v;
+  try { return JSON.parse(v); } catch (e) { return null; }
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -64,7 +70,9 @@ module.exports = async (req, res) => {
     const used = parseInt(meta.calls_used || '0', 10);
     const limit = parseInt(meta.calls_limit || '0', 10);
     let reason = null;
-    if (meta.status !== 'active') reason = 'inactive';
+    const sub = parseSub(await kvGet('sub:' + shop));
+    if (sub && sub.status && sub.status !== 'ACTIVE') reason = 'inactive';
+    else if (meta.status !== 'active') reason = 'inactive';
     else if (used >= limit) reason = 'quota';
 
     return res.json({ active: !reason, reason, ...cfg });
