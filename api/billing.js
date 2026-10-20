@@ -41,6 +41,8 @@ async function kvSet(key, value) {
 
 // ── Token exchange (JWT → OAuth offline token) ────────────
 async function tokenExchange(sessionJwt, shop) {
+  console.log('tokenExchange: API_KEY presente:', !!API_KEY, '| API_SECRET presente:', !!API_SECRET);
+  console.log('tokenExchange: JWT lunghezza:', sessionJwt ? sessionJwt.length : 0);
   try {
     const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
       client_id: API_KEY,
@@ -55,8 +57,10 @@ async function tokenExchange(sessionJwt, shop) {
       console.log('Token exchange OK per shop:', shop);
       return t;
     }
+    console.log('Token exchange: risposta senza access_token:', JSON.stringify(r.data));
   } catch(e) {
-    console.log('Token exchange errore:', e.response?.data || e.message);
+    console.log('Token exchange errore status:', e.response?.status);
+    console.log('Token exchange errore body:', JSON.stringify(e.response?.data));
   }
   return null;
 }
