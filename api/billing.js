@@ -242,6 +242,7 @@ module.exports = async (req, res) => {
           name: "${p.name}"
           returnUrl: "${returnUrl}"
           trialDays: ${p.trialDays}
+          test: true
           lineItems: [{
             plan: {
               appRecurringPricingDetails: {
