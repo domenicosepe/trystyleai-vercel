@@ -339,10 +339,7 @@ module.exports = async (req, res) => {
   if (action === 'get_config') {
     try {
       const cfg = await kvGet('config:' + shop);
-      if (cfg) {
-        return res.json(JSON.parse(cfg));
-      }
-      // Default config
+      if (cfg) return res.json(JSON.parse(cfg));
       return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
     } catch (e) {
       return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
@@ -351,10 +348,11 @@ module.exports = async (req, res) => {
 
   // ── Salva config widget ───────────────────────────────────
   if (action === 'save_config') {
+    // Supporta sia GET (query string) che POST (body)
     const cfg = {
-      btnText: b.btnText || 'Prova questo outfit',
-      btnColor: b.btnColor || '#7b2ff7',
-      btnTextColor: b.btnTextColor || '#ffffff'
+      btnText: q.btnText || b.btnText || 'Prova questo outfit',
+      btnColor: q.btnColor || b.btnColor || '#7b2ff7',
+      btnTextColor: q.btnTextColor || b.btnTextColor || '#ffffff'
     };
     try {
       await kvSet('config:' + shop, JSON.stringify(cfg));
