@@ -335,6 +335,41 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── Leggi config widget ───────────────────────────────────
+  if (action === 'get_config') {
+    try {
+      const cfg = await kvGet('config:' + shop);
+      if (cfg) {
+        return res.json(JSON.parse(cfg));
+      }
+      // Default config
+      return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
+    } catch (e) {
+      return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
+    }
+  }
+
+  // ── Salva config widget ───────────────────────────────────
+  if (action === 'save_config') {
+    const cfg = {
+      btnText: b.btnText || 'Prova questo outfit',
+      btnColor: b.btnColor || '#7b2ff7',
+      btnTextColor: b.btnTextColor || '#ffffff'
+    };
+    try {
+      await kvSet('config:' + shop, JSON.stringify(cfg));
+      // Aggiorna anche metafield così il widget lo legge
+      if (token) {
+        await updateMeta(shop, token, 'btn_text', cfg.btnText);
+        await updateMeta(shop, token, 'btn_color', cfg.btnColor);
+        await updateMeta(shop, token, 'btn_text_color', cfg.btnTextColor);
+      }
+      return res.json({ ok: true, config: cfg });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message });
+    }
+  }
+
   // ── Cancella abbonamento ──────────────────────────────────
   if (action === 'cancel') {
     const body = req.body || {};
