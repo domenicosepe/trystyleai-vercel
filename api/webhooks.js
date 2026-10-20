@@ -28,11 +28,17 @@ function verifyHmac(hmacHeader, rawBody) {
 }
 
 async function readRaw(req) {
-  if (Buffer.isBuffer(req.body)) return req.body;
-  if (typeof req.body === 'string') return Buffer.from(req.body);
+  // Prima lo stream: accedere a req.body su Vercel avvia il parsing JSON e si perdono i byte originali
   const chunks = [];
-  for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  return Buffer.concat(chunks);
+  try {
+    for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  } catch (e) {}
+  if (chunks.length) return { raw: Buffer.concat(chunks), source: 'stream' };
+  const b = req.body;
+  if (Buffer.isBuffer(b)) return { raw: b, source: 'body-buffer' };
+  if (typeof b === 'string') return { raw: Buffer.from(b), source: 'body-string' };
+  if (b && typeof b === 'object') return { raw: Buffer.from(JSON.stringify(b)), source: 'body-json' };
+  return { raw: Buffer.alloc(0), source: 'empty' };
 }
 
 // Tutte le chiavi KV legate a un negozio
@@ -43,11 +49,14 @@ function shopKeys(shop) {
 async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-  let rawBody;
-  try { rawBody = await readRaw(req); } catch (e) { return res.status(400).send('Bad Request'); }
+  let rawBody, source;
+  try { const r = await readRaw(req); rawBody = r.raw; source = r.source; } catch (e) { return res.status(400).send('Bad Request'); }
 
-  if (!verifyHmac(req.headers['x-shopify-hmac-sha256'], rawBody)) {
-    console.log('Webhook HMAC non valido');
+  const hmacHeader = req.headers['x-shopify-hmac-sha256'];
+  if (!verifyHmac(hmacHeader, rawBody)) {
+    console.log('Webhook HMAC non valido | topic:', req.headers['x-shopify-topic'] || '-',
+      '| bytes:', rawBody.length, '| fonte:', source, '| header hmac:', hmacHeader ? 'presente' : 'assente',
+      '| secret configurato:', !!API_SECRET);
     return res.status(401).send('Unauthorized');
   }
 
