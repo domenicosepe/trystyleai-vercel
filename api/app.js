@@ -181,7 +181,7 @@ module.exports = (req, res) => {
     if (data.plan !== 'none' && data.callsLimit > 0 && remaining === 0) {
       html += '<div class="alert alert-danger">Generazioni esaurite per questo mese. Passa a un piano superiore per continuare.</div>';
     } else if (isDanger && data.plan !== 'none') {
-      html += '<div class="alert alert-warning">Hai usato oltre l\'80% delle generazioni disponibili questo mese.</div>';
+      html += '<div class="alert alert-warning">Hai usato oltre l' + "'" + '80% delle generazioni disponibili questo mese.</div>';
     }
 
     html += '<div class="status-banner">';
