@@ -2,9 +2,9 @@
 // GET /api/widget?shop=...              → JavaScript del widget
 // GET /api/widget?action=config&shop=... → { active, reason, btnText, btnColor, btnTextColor }
 const axios = require('axios');
+const { parseStored } = require('./_config');
 
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
-const DEFAULT_CFG = { btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' };
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
 function kvDecode(val) {
@@ -55,11 +55,7 @@ module.exports = async (req, res) => {
     const shop = String(q.shop || '').toLowerCase();
     if (!SHOP_RE.test(shop)) return res.status(400).json({ active: false, reason: 'shop' });
 
-    let cfg = { ...DEFAULT_CFG };
-    try {
-      const raw = await kvGet('config:' + shop);
-      if (raw) cfg = { ...cfg, ...(typeof raw === 'string' ? JSON.parse(raw) : raw) };
-    } catch (e) {}
+    const cfg = parseStored(await kvGet('config:' + shop));
 
     const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
     if (!token) return res.json({ active: false, reason: 'token', ...cfg });
@@ -175,14 +171,26 @@ function widgetMain(APP, SHOP_PARAM) {
 
   function injectStyles(cfg) {
     var C = cfg.btnColor, T = cfg.btnTextColor, A = cfg.accentColor || '#c9a24a';
+    var B = cfg.btnBorderColor || '#d4d4d4', R = (cfg.btnRadius == null ? 4 : cfg.btnRadius) + 'px';
+    var P = cfg.primaryColor || '#111111', PT = cfg.primaryTextColor || '#ffffff';
+    var MR = (cfg.modalRadius == null ? 8 : cfg.modalRadius) + 'px';
+    var FR = Math.min(cfg.modalRadius == null ? 8 : cfg.modalRadius, 12) + 'px';
+    var F = 'inherit';
+    if (cfg.font && cfg.font !== 'theme') {
+      F = '"' + cfg.font + '",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+      var lk = document.createElement('link');
+      lk.rel = 'stylesheet';
+      lk.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(cfg.font).replace(/%20/g, '+') + ':wght@400;500;600;700&display=swap';
+      document.head.appendChild(lk);
+    }
     var css = ''
-      + '.tsai-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:12px 0;padding:15px 18px;border:1px solid rgba(0,0,0,.22);border-radius:4px;font-family:inherit;font-size:15px;font-weight:600;letter-spacing:.01em;cursor:pointer;background:' + C + ';color:' + T + ';transition:opacity .2s,border-color .2s}'
-      + '.tsai-btn:hover{opacity:.9;border-color:rgba(0,0,0,.45)}'
+      + '.tsai-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:12px 0;padding:15px 18px;border:1px solid ' + B + ';border-radius:' + R + ';font-family:' + F + ';font-size:15px;font-weight:600;letter-spacing:.01em;cursor:pointer;background:' + C + ';color:' + T + ';transition:opacity .2s}'
+      + '.tsai-btn:hover{opacity:.88}'
       + '.tsai-btn svg{flex:none}'
       + '.tsai-btn.tsai-float{position:fixed;right:16px;bottom:16px;width:auto;z-index:99998;box-shadow:0 6px 20px rgba(0,0,0,.2);border-radius:999px}'
       + '.tsai-ov{position:fixed;inset:0;background:rgba(17,17,17,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px}'
       + '.tsai-md,.tsai-md *{box-sizing:border-box}'
-      + '.tsai-md{position:relative;background:#fff;color:#111;border-radius:6px;width:100%;max-width:620px;max-height:94vh;overflow:auto;padding:26px 28px 24px;font-family:inherit;box-shadow:0 24px 60px rgba(0,0,0,.25)}'
+      + '.tsai-md{position:relative;background:#fff;color:#111;border-radius:' + MR + ';width:100%;max-width:620px;max-height:94vh;overflow:auto;padding:26px 28px 24px;font-family:' + F + ';box-shadow:0 24px 60px rgba(0,0,0,.25)}'
       + '.tsai-x{position:absolute;top:16px;right:16px;width:34px;height:34px;border:0;background:none;font-size:26px;line-height:1;cursor:pointer;color:#333}'
       + '.tsai-ttl{font-size:21px;font-weight:700;margin:0 40px 16px 0;line-height:1.2}'
       + '.tsai-steps{display:flex;gap:18px;margin-bottom:22px}'
@@ -193,20 +201,20 @@ function widgetMain(APP, SHOP_PARAM) {
       + '.tsai-pair{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:6px}'
       + '.tsai-cell{min-width:0}'
       + '.tsai-lbl{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#555;text-align:center;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-      + '.tsai-frame{position:relative;width:100%;aspect-ratio:3/4;border-radius:6px;overflow:hidden;background:#f3f3f3}'
+      + '.tsai-frame{position:relative;width:100%;aspect-ratio:3/4;border-radius:' + FR + ';overflow:hidden;background:#f3f3f3}'
       + '.tsai-frame img{width:100%;height:100%;object-fit:cover;display:block}'
       + '.tsai-arrow{color:' + A + ';text-align:center;font-size:20px;padding-top:18px}'
-      + '.tsai-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;text-align:center;border:1.5px dashed #cfcfcf;border-radius:6px}'
+      + '.tsai-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;text-align:center;border:1.5px dashed #cfcfcf;border-radius:' + FR + '}'
       + '.tsai-empty p{margin:0;font-size:12px;color:#777;line-height:1.4}'
-      + '.tsai-pick{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 10px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #111;font-family:inherit;text-align:center}'
+      + '.tsai-pick{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 10px;border-radius:' + R + ';font-size:13px;font-weight:600;cursor:pointer;border:1px solid ' + P + ';font-family:inherit;text-align:center}'
       + '.tsai-pick input{display:none}'
-      + '.tsai-pick.p1{background:#111;color:#fff}.tsai-pick.p2{background:#fff;color:#111}'
+      + '.tsai-pick.p1{background:' + P + ';color:' + PT + '}.tsai-pick.p2{background:#fff;color:' + P + '}'
       + '.tsai-chg{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(255,255,255,.94);border:0;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;color:#111}'
       + '.tsai-chg input{display:none}'
       + '.tsai-note{font-size:12px;color:#888;text-align:center;margin:16px 0 0;line-height:1.45}'
       + '.tsai-acts{display:flex;flex-direction:column;gap:10px;margin-top:16px}'
-      + '.tsai-a{display:block;width:100%;padding:14px 16px;border-radius:4px;font-family:inherit;font-weight:600;font-size:15px;cursor:pointer;border:1px solid #111;text-align:center}'
-      + '.tsai-a1{background:#111;color:#fff}.tsai-a2{background:#fff;color:#111;border-color:#cfcfcf}'
+      + '.tsai-a{display:block;width:100%;padding:14px 16px;border-radius:' + R + ';font-family:inherit;font-weight:600;font-size:15px;cursor:pointer;border:1px solid ' + P + ';text-align:center}'
+      + '.tsai-a1{background:' + P + ';color:' + PT + '}.tsai-a2{background:#fff;color:#111;border-color:#cfcfcf}'
       + '.tsai-a[disabled]{opacity:.45;cursor:default}'
       + '.tsai-err{background:#fdecea;color:#a61b1b;border-radius:4px;padding:10px 12px;font-size:13px;margin-top:14px}'
       + '.tsai-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#f6f4ef;text-align:center;padding:12px}'
@@ -242,7 +250,7 @@ function widgetMain(APP, SHOP_PARAM) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tsai-btn';
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg><span></span>';
+    btn.innerHTML = (cfg.showIcon === false ? '' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>') + '<span></span>';
     btn.querySelector('span').textContent = cfg.btnText;
     btn.addEventListener('click', function (e) { e.preventDefault(); openModal(cfg, product, btn); });
 

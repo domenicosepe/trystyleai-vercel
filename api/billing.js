@@ -1,5 +1,6 @@
 // api/billing.js — Shopify Billing API v2
 const axios = require('axios');
+const { FONTS, sanitize, parseStored } = require('./_config');
 
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
@@ -442,34 +443,16 @@ module.exports = async (req, res) => {
 
   // ── Leggi config widget ───────────────────────────────────
   if (action === 'get_config') {
-    try {
-      const cfg = await kvGet('config:' + shop);
-      if (cfg) return res.json(typeof cfg === 'string' ? JSON.parse(cfg) : cfg);
-      return res.json({ btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' });
-    } catch (e) {
-      return res.json({ btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' });
-    }
+    const cfg = parseStored(await kvGet('config:' + shop));
+    return res.json({ ...cfg, fonts: FONTS });
   }
 
   // ── Salva config widget ───────────────────────────────────
   if (action === 'save_config') {
-    // Supporta sia GET (query string) che POST (body)
-    const HEX = /^#[0-9a-fA-F]{6}$/;
-    const pickHex = (v, d) => (HEX.test(String(v || '')) ? String(v) : d);
-    const cfg = {
-      btnText: String(q.btnText || b.btnText || 'Provalo indossato').substring(0, 40),
-      btnColor: pickHex(q.btnColor || b.btnColor, '#ffffff'),
-      btnTextColor: pickHex(q.btnTextColor || b.btnTextColor, '#111111'),
-      accentColor: pickHex(q.accentColor || b.accentColor, '#c9a24a')
-    };
+    // Supporta sia GET (query string) che POST (body); sanitize valida ogni campo
+    const cfg = sanitize({ ...b, ...q });
     try {
       await kvSet('config:' + shop, JSON.stringify(cfg));
-      // Aggiorna anche metafield così il widget lo legge
-      if (token) {
-        await updateMeta(shop, token, 'btn_text', cfg.btnText);
-        await updateMeta(shop, token, 'btn_color', cfg.btnColor);
-        await updateMeta(shop, token, 'btn_text_color', cfg.btnTextColor);
-      }
       return res.json({ ok: true, config: cfg });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message });
