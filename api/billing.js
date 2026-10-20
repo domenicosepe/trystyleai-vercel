@@ -141,6 +141,15 @@ module.exports = async (req, res) => {
   const token = await getValidToken(shop, session_token, requireFresh);
   console.log('token ottenuto:', !!token, '| requireFresh:', requireFresh);
 
+  // Se subscribe senza token → errore chiaro (non usare token vecchio da KV)
+  if (action === 'subscribe' && !token) {
+    console.log('Subscribe senza token valido — token exchange fallito o JWT assente');
+    return res.status(401).json({
+      error: 'Sessione scaduta. Reinstalla l\'app.',
+      redirectUrl: `${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`
+    });
+  }
+
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
     if (!plan || !PLANS[plan]) {
