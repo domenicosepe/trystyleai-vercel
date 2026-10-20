@@ -222,6 +222,36 @@ module.exports = async (req, res) => {
   };
   console.log('diagnosi:', JSON.stringify(_debug));
 
+  // ── Lista subscription attive (debug) ────────────────────
+  if (action === 'list_subs') {
+    if (!token) return res.json({ error: 'no token', _debug });
+    try {
+      const q2 = `{ currentAppInstallation { activeSubscriptions { id name status test createdAt } } }`;
+      const r = await axios.post(`https://${shop}/admin/api/2025-01/graphql.json`,
+        { query: q2 }, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+      return res.json(r.data);
+    } catch(e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // ── Cancella tutte le subscription di test ────────────────
+  if (action === 'cancel_all') {
+    if (!token) return res.json({ error: 'no token', _debug });
+    try {
+      const q2 = `{ currentAppInstallation { activeSubscriptions { id name status } } }`;
+      const r = await axios.post(`https://${shop}/admin/api/2025-01/graphql.json`,
+        { query: q2 }, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+      const subs = r.data.data?.currentAppInstallation?.activeSubscriptions || [];
+      const cancelled = [];
+      for (const sub of subs) {
+        const mut = `mutation { appSubscriptionCancel(id: "${sub.id}") { appSubscription { id status } userErrors { message } } }`;
+        await axios.post(`https://${shop}/admin/api/2025-01/graphql.json`,
+          { query: mut }, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+        cancelled.push(sub.id);
+      }
+      return res.json({ cancelled, total: cancelled.length });
+    } catch(e) { return res.status(500).json({ error: e.message }); }
+  }
+
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
     if (!plan || !PLANS[plan]) {
@@ -235,16 +265,17 @@ module.exports = async (req, res) => {
     const p = PLANS[plan];
     const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}`;
 
-    // Versione API 2025-01 — supporta expiring offline tokens
-    // test: true solo se BILLING_TEST=true nelle env var (non in produzione!)
-    const testFlag = process.env.BILLING_TEST === 'true' ? '\n          test: true' : '';
+    // test: true obbligatorio su dev store Shopify
+    // Su produzione (negozio reale) impostare BILLING_TEST=false nelle env Vercel
+    const isTest = process.env.BILLING_TEST !== 'false';
 
     const mutation = `
       mutation {
         appSubscriptionCreate(
           name: "${p.name}"
           returnUrl: "${returnUrl}"
-          trialDays: ${p.trialDays}${testFlag}
+          trialDays: ${p.trialDays}
+          ${isTest ? 'test: true' : ''}
           lineItems: [{
             plan: {
               appRecurringPricingDetails: {
