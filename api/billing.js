@@ -445,19 +445,22 @@ module.exports = async (req, res) => {
     try {
       const cfg = await kvGet('config:' + shop);
       if (cfg) return res.json(typeof cfg === 'string' ? JSON.parse(cfg) : cfg);
-      return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
+      return res.json({ btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' });
     } catch (e) {
-      return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
+      return res.json({ btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' });
     }
   }
 
   // ── Salva config widget ───────────────────────────────────
   if (action === 'save_config') {
     // Supporta sia GET (query string) che POST (body)
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+    const pickHex = (v, d) => (HEX.test(String(v || '')) ? String(v) : d);
     const cfg = {
-      btnText: q.btnText || b.btnText || 'Prova questo outfit',
-      btnColor: q.btnColor || b.btnColor || '#7b2ff7',
-      btnTextColor: q.btnTextColor || b.btnTextColor || '#ffffff'
+      btnText: String(q.btnText || b.btnText || 'Provalo indossato').substring(0, 40),
+      btnColor: pickHex(q.btnColor || b.btnColor, '#ffffff'),
+      btnTextColor: pickHex(q.btnTextColor || b.btnTextColor, '#111111'),
+      accentColor: pickHex(q.accentColor || b.accentColor, '#c9a24a')
     };
     try {
       await kvSet('config:' + shop, JSON.stringify(cfg));

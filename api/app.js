@@ -76,7 +76,7 @@ module.exports = (req, res) => {
     .hex-input { max-width: 120px; padding: 10px 12px; border: 1px solid #e1e3e5; border-radius: 8px; font-size: 14px; }
     .widget-preview { background: #f6f6f7; border: 1px solid #e1e3e5; border-radius: 12px; padding: 20px; margin-top: 20px; }
     .widget-preview h3 { font-size: 13px; font-weight: 600; color: #6d7175; margin-bottom: 12px; text-transform: uppercase; }
-    .preview-btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; border: none; cursor: default; color: white; }
+    .preview-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 420px; padding: 14px 18px; border-radius: 4px; font-size: 15px; font-weight: 600; border: 1px solid rgba(0,0,0,.22); cursor: default; }
     .save-row { display: flex; justify-content: flex-end; align-items: center; margin-top: 24px; gap: 12px; }
     .btn-save { background: #7b2ff7; color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
     .save-msg { font-size: 13px; }
@@ -320,6 +320,11 @@ module.exports = (req, res) => {
           document.getElementById('btn-color-hex').value = cfg.btnColor;
           document.getElementById('color-preview').style.background = cfg.btnColor;
         }
+        if (cfg.accentColor) {
+          document.getElementById('accent-color').value = cfg.accentColor;
+          document.getElementById('accent-hex').value = cfg.accentColor;
+          document.getElementById('ac-preview').style.background = cfg.accentColor;
+        }
         if (cfg.btnTextColor) {
           document.getElementById('btn-text-color').value = cfg.btnTextColor;
           document.getElementById('btn-tc-hex').value = cfg.btnTextColor;
@@ -332,11 +337,12 @@ module.exports = (req, res) => {
   }
 
   function updatePreview() {
-    var text  = document.getElementById('btn-text').value || 'Prova questo outfit';
-    var color = document.getElementById('btn-color').value || '#7b2ff7';
-    var tc    = document.getElementById('btn-text-color').value || '#ffffff';
+    var text  = document.getElementById('btn-text').value || 'Provalo indossato';
+    var color = document.getElementById('btn-color').value || '#ffffff';
+    var tc    = document.getElementById('btn-text-color').value || '#111111';
     var pb = document.getElementById('preview-btn');
-    pb.textContent = text;
+    pb.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg><span></span>';
+    pb.querySelector('span').textContent = text;
     pb.style.background = color;
     pb.style.color = tc;
   }
@@ -361,6 +367,7 @@ module.exports = (req, res) => {
 
   wireColor('btn-color', 'btn-color-hex', 'color-preview');
   wireColor('btn-text-color', 'btn-tc-hex', 'tc-preview');
+  wireColor('accent-color', 'accent-hex', 'ac-preview');
   document.getElementById('btn-text').addEventListener('input', updatePreview);
 
   document.getElementById('btn-save').addEventListener('click', function() {
@@ -370,9 +377,10 @@ module.exports = (req, res) => {
     msg.textContent = '';
     getToken(function(tok) {
       var url = '/api/billing?action=save_config&shop=' + encodeURIComponent(shop)
-        + '&btnText=' + encodeURIComponent(document.getElementById('btn-text').value || 'Prova questo outfit')
-        + '&btnColor=' + encodeURIComponent(document.getElementById('btn-color').value || '#7b2ff7')
-        + '&btnTextColor=' + encodeURIComponent(document.getElementById('btn-text-color').value || '#ffffff');
+        + '&btnText=' + encodeURIComponent(document.getElementById('btn-text').value || 'Provalo indossato')
+        + '&btnColor=' + encodeURIComponent(document.getElementById('btn-color').value || '#ffffff')
+        + '&btnTextColor=' + encodeURIComponent(document.getElementById('btn-text-color').value || '#111111')
+        + '&accentColor=' + encodeURIComponent(document.getElementById('accent-color').value || '#c9a24a');
       if (tok) url += '&session_token=' + encodeURIComponent(tok);
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url);
@@ -419,27 +427,35 @@ module.exports = (req, res) => {
         '<h2>Personalizza il widget Virtual Try-On</h2>' +
         '<div class="form-group">' +
           '<label class="form-label" for="btn-text">Testo del bottone</label>' +
-          '<input type="text" id="btn-text" class="form-input" maxlength="40" placeholder="Prova questo outfit" />' +
+          '<input type="text" id="btn-text" class="form-input" maxlength="40" placeholder="Provalo indossato" />' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Colore bottone</label>' +
           '<div class="color-row">' +
-            '<input type="color" id="btn-color" class="color-input" value="#7b2ff7" />' +
-            '<div class="color-preview" id="color-preview" style="background:#7b2ff7"></div>' +
-            '<input type="text" id="btn-color-hex" class="hex-input" value="#7b2ff7" placeholder="#7b2ff7" />' +
+            '<input type="color" id="btn-color" class="color-input" value="#ffffff" />' +
+            '<div class="color-preview" id="color-preview" style="background:#ffffff;border:1px solid #ccc"></div>' +
+            '<input type="text" id="btn-color-hex" class="hex-input" value="#ffffff" placeholder="#ffffff" />' +
           '</div>' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Colore testo bottone</label>' +
           '<div class="color-row">' +
-            '<input type="color" id="btn-text-color" class="color-input" value="#ffffff" />' +
-            '<div class="color-preview" id="tc-preview" style="background:#ffffff;border:1px solid #ccc"></div>' +
-            '<input type="text" id="btn-tc-hex" class="hex-input" value="#ffffff" placeholder="#ffffff" />' +
+            '<input type="color" id="btn-text-color" class="color-input" value="#111111" />' +
+            '<div class="color-preview" id="tc-preview" style="background:#111111"></div>' +
+            '<input type="text" id="btn-tc-hex" class="hex-input" value="#111111" placeholder="#111111" />' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Colore accento finestra (passi e caricamento)</label>' +
+          '<div class="color-row">' +
+            '<input type="color" id="accent-color" class="color-input" value="#c9a24a" />' +
+            '<div class="color-preview" id="ac-preview" style="background:#c9a24a"></div>' +
+            '<input type="text" id="accent-hex" class="hex-input" value="#c9a24a" placeholder="#c9a24a" />' +
           '</div>' +
         '</div>' +
         '<div class="widget-preview">' +
           '<h3>Anteprima</h3>' +
-          '<button class="preview-btn" id="preview-btn" style="background:#7b2ff7;color:#ffffff">Prova questo outfit</button>' +
+          '<button class="preview-btn" id="preview-btn" style="background:#ffffff;color:#111111"><span id="preview-txt">Provalo indossato</span></button>' +
         '</div>' +
         '<div class="save-row">' +
           '<span class="save-msg" id="save-msg"></span>' +

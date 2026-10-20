@@ -4,7 +4,7 @@
 const axios = require('axios');
 
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
-const DEFAULT_CFG = { btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' };
+const DEFAULT_CFG = { btnText: 'Provalo indossato', btnColor: '#ffffff', btnTextColor: '#111111', accentColor: '#c9a24a' };
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
 function kvDecode(val) {
@@ -174,50 +174,53 @@ function widgetMain(APP, SHOP_PARAM) {
   }
 
   function injectStyles(cfg) {
-    var C = cfg.btnColor, T = cfg.btnTextColor;
+    var C = cfg.btnColor, T = cfg.btnTextColor, A = cfg.accentColor || '#c9a24a';
     var css = ''
-      + '.tsai-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:10px 0;padding:14px 18px;border:0;border-radius:6px;font:600 15px/1.2 inherit;cursor:pointer;background:' + C + ';color:' + T + ';transition:opacity .2s}'
-      + '.tsai-btn:hover{opacity:.88}'
+      + '.tsai-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:12px 0;padding:15px 18px;border:1px solid rgba(0,0,0,.22);border-radius:4px;font-family:inherit;font-size:15px;font-weight:600;letter-spacing:.01em;cursor:pointer;background:' + C + ';color:' + T + ';transition:opacity .2s,border-color .2s}'
+      + '.tsai-btn:hover{opacity:.9;border-color:rgba(0,0,0,.45)}'
+      + '.tsai-btn svg{flex:none}'
       + '.tsai-btn.tsai-float{position:fixed;right:16px;bottom:16px;width:auto;z-index:99998;box-shadow:0 6px 20px rgba(0,0,0,.2);border-radius:999px}'
-      + '.tsai-ov{position:fixed;inset:0;background:rgba(17,17,17,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px}'
-      + '.tsai-md{background:#fff;color:#111;border-radius:18px;width:100%;max-width:780px;max-height:94vh;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 24px 60px rgba(0,0,0,.25)}'
+      + '.tsai-ov{position:fixed;inset:0;background:rgba(17,17,17,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px}'
       + '.tsai-md,.tsai-md *{box-sizing:border-box}'
-      + '.tsai-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #eee}'
-      + '.tsai-ttl{font-size:17px;font-weight:700;margin:0}'
-      + '.tsai-sub{font-size:12px;color:#777;margin-top:2px}'
-      + '.tsai-x{width:36px;height:36px;border-radius:50%;border:0;background:#f2f2f2;font-size:22px;line-height:1;cursor:pointer;color:#333;flex:none}'
-      + '.tsai-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px}'
-      + '.tsai-col{min-width:0;display:flex;flex-direction:column}'
-      + '.tsai-lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:8px}'
-      + '.tsai-frame{position:relative;width:100%;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:#f4f4f4}'
+      + '.tsai-md{position:relative;background:#fff;color:#111;border-radius:6px;width:100%;max-width:620px;max-height:94vh;overflow:auto;padding:26px 28px 24px;font-family:inherit;box-shadow:0 24px 60px rgba(0,0,0,.25)}'
+      + '.tsai-x{position:absolute;top:16px;right:16px;width:34px;height:34px;border:0;background:none;font-size:26px;line-height:1;cursor:pointer;color:#333}'
+      + '.tsai-ttl{font-size:21px;font-weight:700;margin:0 40px 16px 0;line-height:1.2}'
+      + '.tsai-steps{display:flex;gap:18px;margin-bottom:22px}'
+      + '.tsai-st{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:#9a9a9a;text-align:center;min-width:58px}'
+      + '.tsai-st i{font-style:normal;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:#ececec;color:#8a8a8a}'
+      + '.tsai-st.on{color:#111;font-weight:600}.tsai-st.on i,.tsai-st.done i{background:' + A + ';color:#fff}'
+      + '.tsai-st.done{color:#555}'
+      + '.tsai-pair{display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:6px}'
+      + '.tsai-cell{min-width:0}'
+      + '.tsai-lbl{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#555;text-align:center;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      + '.tsai-frame{position:relative;width:100%;aspect-ratio:3/4;border-radius:6px;overflow:hidden;background:#f3f3f3}'
       + '.tsai-frame img{width:100%;height:100%;object-fit:cover;display:block}'
-      + '.tsai-pname{font-size:14px;font-weight:600;margin-top:10px;line-height:1.35}'
-      + '.tsai-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;border:2px dashed #d9d9d9;border-radius:14px}'
-      + '.tsai-empty-ic{width:52px;height:52px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.08)}'
-      + '.tsai-empty h4{margin:0;font-size:16px;font-weight:700}'
-      + '.tsai-empty p{margin:0;font-size:13px;color:#777;line-height:1.4}'
-      + '.tsai-acts{display:flex;flex-direction:column;gap:10px;margin-top:14px}'
-      + '.tsai-a{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 16px;border-radius:999px;font-weight:600;font-size:15px;cursor:pointer;border:1px solid transparent;text-align:center}'
-      + '.tsai-a1{background:' + C + ';color:' + T + '}'
-      + '.tsai-a2{background:#fff;color:#111;border-color:#d6d6d6}'
+      + '.tsai-arrow{color:' + A + ';text-align:center;font-size:20px;padding-top:18px}'
+      + '.tsai-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;text-align:center;border:1.5px dashed #cfcfcf;border-radius:6px}'
+      + '.tsai-empty p{margin:0;font-size:12px;color:#777;line-height:1.4}'
+      + '.tsai-pick{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 10px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #111;font-family:inherit;text-align:center}'
+      + '.tsai-pick input{display:none}'
+      + '.tsai-pick.p1{background:#111;color:#fff}.tsai-pick.p2{background:#fff;color:#111}'
+      + '.tsai-chg{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(255,255,255,.94);border:0;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;color:#111}'
+      + '.tsai-chg input{display:none}'
+      + '.tsai-note{font-size:12px;color:#888;text-align:center;margin:16px 0 0;line-height:1.45}'
+      + '.tsai-acts{display:flex;flex-direction:column;gap:10px;margin-top:16px}'
+      + '.tsai-a{display:block;width:100%;padding:14px 16px;border-radius:4px;font-family:inherit;font-weight:600;font-size:15px;cursor:pointer;border:1px solid #111;text-align:center}'
+      + '.tsai-a1{background:#111;color:#fff}.tsai-a2{background:#fff;color:#111;border-color:#cfcfcf}'
       + '.tsai-a[disabled]{opacity:.45;cursor:default}'
-      + '.tsai-a input{display:none}'
-      + '.tsai-chg{position:absolute;right:10px;bottom:10px;background:rgba(255,255,255,.92);border:0;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer}'
-      + '.tsai-err{background:#fdecea;color:#a61b1b;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:12px}'
-      + '.tsai-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(255,255,255,.82);text-align:center;padding:16px}'
-      + '.tsai-spin{width:40px;height:40px;border:4px solid #e6e6e6;border-top-color:' + C + ';border-radius:50%;animation:tsai-r 1s linear infinite}'
+      + '.tsai-err{background:#fdecea;color:#a61b1b;border-radius:4px;padding:10px 12px;font-size:13px;margin-top:14px}'
+      + '.tsai-load{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#f6f4ef;text-align:center;padding:12px}'
+      + '.tsai-spin{width:36px;height:36px;border:3px solid #e4e0d6;border-top-color:' + A + ';border-radius:50%;animation:tsai-r 1s linear infinite}'
       + '@keyframes tsai-r{to{transform:rotate(360deg)}}'
-      + '.tsai-load b{font-size:14px}.tsai-load span{font-size:12px;color:#666}'
-      + '.tsai-note{font-size:11px;color:#999;margin-top:12px;text-align:center;line-height:1.4}'
-      + '@media (max-width:640px){'
+      + '.tsai-load b{font-size:13px}.tsai-load span{font-size:11px;color:#777}'
+      + '@media (max-width:560px){'
       +   '.tsai-ov{padding:0;align-items:flex-end}'
-      +   '.tsai-md{border-radius:18px 18px 0 0;max-height:96vh}'
-      +   '.tsai-grid{grid-template-columns:1fr;gap:14px;padding:16px}'
-      +   '.tsai-prod{flex-direction:row;align-items:center;gap:12px}'
-      +   '.tsai-prod .tsai-lbl{display:none}'
-      +   '.tsai-prod .tsai-frame{width:72px;flex:none;border-radius:10px}'
-      +   '.tsai-prod .tsai-pname{margin-top:0}'
-      +   '.tsai-me .tsai-frame{max-height:46vh}'
+      +   '.tsai-md{border-radius:14px 14px 0 0;max-height:96vh;padding:20px 16px 18px}'
+      +   '.tsai-ttl{font-size:18px}'
+      +   '.tsai-steps{gap:10px;margin-bottom:16px}'
+      +   '.tsai-pair{grid-template-columns:1fr 18px 1fr;gap:4px}'
+      +   '.tsai-arrow{font-size:16px}'
+      +   '.tsai-pick{font-size:12px;padding:10px 6px}'
       + '}';
     var st = document.createElement('style');
     st.textContent = css;
@@ -239,7 +242,8 @@ function widgetMain(APP, SHOP_PARAM) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tsai-btn';
-    btn.textContent = cfg.btnText;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg><span></span>';
+    btn.querySelector('span').textContent = cfg.btnText;
     btn.addEventListener('click', function (e) { e.preventDefault(); openModal(cfg, product, btn); });
 
     var anchor = document.querySelector('.trystyleai-anchor');
@@ -278,25 +282,20 @@ function widgetMain(APP, SHOP_PARAM) {
     var garment = garmentUrl(product);
     var userImg = null;
     var closed = false;
-    var CAM = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-    var PLUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
-    var USER = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>';
+    var CAM = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    var UP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>';
+    var USER = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>';
+    var STEPS = ['La tua foto', 'Elaborazione', 'Risultato'];
 
     var ov = document.createElement('div');
     ov.className = 'tsai-ov';
-    ov.innerHTML = ''
-      + '<div class="tsai-md" role="dialog" aria-modal="true" aria-label="' + esc(cfg.btnText) + '">'
-      +   '<div class="tsai-hd"><div><div class="tsai-ttl">' + esc(cfg.btnText) + '</div><div class="tsai-sub">Scopri come ti sta</div></div>'
-      +   '<button class="tsai-x" aria-label="Chiudi">&times;</button></div>'
-      +   '<div class="tsai-grid">'
-      +     '<div class="tsai-col tsai-prod"><div class="tsai-lbl">Il capo</div>'
-      +       '<div class="tsai-frame"><img alt="' + esc(product.title) + '" src="' + esc(garment) + '"></div>'
-      +       '<div class="tsai-pname">' + esc(product.title) + '</div></div>'
-      +     '<div class="tsai-col tsai-me"></div>'
-      +   '</div>'
-      + '</div>';
+    ov.innerHTML = '<div class="tsai-md" role="dialog" aria-modal="true" aria-label="' + esc(cfg.btnText) + '">'
+      + '<button class="tsai-x" aria-label="Chiudi">&times;</button>'
+      + '<div class="tsai-ttl">' + esc(cfg.btnText) + '</div>'
+      + '<div class="tsai-steps"></div><div class="tsai-body"></div></div>';
     document.body.appendChild(ov);
-    var side = ov.querySelector('.tsai-me');
+    var stepsEl = ov.querySelector('.tsai-steps');
+    var body = ov.querySelector('.tsai-body');
 
     function close() { closed = true; if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
     function onKey(e) { if (e.key === 'Escape') close(); }
@@ -304,14 +303,24 @@ function widgetMain(APP, SHOP_PARAM) {
     ov.querySelector('.tsai-x').onclick = close;
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
 
-    function pickers() {
-      return ''
-        + '<label class="tsai-a tsai-a1">' + PLUS + (userImg ? 'Cambia foto' : 'Scegli la tua foto') + '<input type="file" accept="image/*" class="tsai-f1"></label>'
-        + '<label class="tsai-a tsai-a2">' + CAM + 'Scatta una foto<input type="file" accept="image/*" capture="user" class="tsai-f2"></label>';
+    function setStep(n) {
+      var h = '';
+      for (var i = 0; i < 3; i++) {
+        var cls = i + 1 < n ? 'done' : (i + 1 === n ? 'on' : '');
+        if (n === 3 && i === 2) cls = 'on done';
+        h += '<div class="tsai-st ' + cls + '"><i>' + (i + 1) + '</i>' + STEPS[i] + '</div>';
+      }
+      stepsEl.innerHTML = h;
     }
 
-    function bindPickers() {
-      var inputs = side.querySelectorAll('input[type=file]');
+    function cell(label, inner) {
+      return '<div class="tsai-cell"><div class="tsai-lbl">' + esc(label) + '</div>' + inner + '</div>';
+    }
+    var ARROW = '<div class="tsai-arrow">&rarr;</div>';
+    var withLabel = 'Con ' + product.title;
+
+    function bindFiles() {
+      var inputs = body.querySelectorAll('input[type=file]');
       for (var i = 0; i < inputs.length; i++) {
         inputs[i].onchange = function () {
           if (!this.files || !this.files[0]) return;
@@ -325,37 +334,49 @@ function widgetMain(APP, SHOP_PARAM) {
     }
 
     function stepUpload(err) {
-      var frame = userImg
-        ? '<div class="tsai-frame"><img alt="La tua foto" src="' + userImg + '"></div>'
-        : '<div class="tsai-frame"><div class="tsai-empty"><div class="tsai-empty-ic">' + USER + '</div>'
-          + '<h4>Carica la tua foto</h4><p>Foto a figura intera o mezzo busto, frontale e ben illuminata.</p></div></div>';
-      side.innerHTML = '<div class="tsai-lbl">La tua foto</div>' + frame
-        + (err ? '<div class="tsai-err">' + esc(err) + '</div>' : '')
-        + '<div class="tsai-acts">'
-        + (userImg ? '<button class="tsai-a tsai-a1 tsai-go">Genera la prova</button>' + pickers().replace('tsai-a tsai-a1', 'tsai-a tsai-a2') : pickers())
+      setStep(1);
+      var mine = userImg
+        ? '<div class="tsai-frame"><img alt="La tua foto" src="' + userImg + '"><label class="tsai-chg">Cambia foto<input type="file" accept="image/*"></label></div>'
+        : '<div class="tsai-frame"><div class="tsai-empty">' + USER + '<p>Foto frontale, a figura intera o mezzo busto, ben illuminata</p>'
+          + '<label class="tsai-pick p1">' + UP + 'Carica foto<input type="file" accept="image/*"></label>'
+          + '<label class="tsai-pick p2">' + CAM + 'Scatta foto<input type="file" accept="image/*" capture="user"></label>'
+          + '</div></div>';
+      body.innerHTML = '<div class="tsai-pair">'
+        + cell('Il capo', '<div class="tsai-frame"><img alt="' + esc(product.title) + '" src="' + esc(garment) + '"></div>')
+        + ARROW
+        + cell('Tu', mine)
         + '</div>'
-        + '<div class="tsai-note">La foto viene usata solo per generare l\'anteprima. L\'AI pu\u00f2 commettere errori.</div>';
-      bindPickers();
-      var go = side.querySelector('.tsai-go');
-      if (go) go.onclick = generate;
+        + (err ? '<div class="tsai-err">' + esc(err) + '</div>' : '')
+        + '<div class="tsai-acts"><button class="tsai-a tsai-a1 tsai-go"' + (userImg ? '' : ' disabled') + '>Provalo ora</button></div>'
+        + '<p class="tsai-note">La foto viene usata solo per generare l\'anteprima.</p>';
+      bindFiles();
+      body.querySelector('.tsai-go').onclick = generate;
     }
 
     function stepLoading() {
-      side.innerHTML = '<div class="tsai-lbl">La tua foto</div>'
-        + '<div class="tsai-frame"><img alt="" src="' + userImg + '">'
-        + '<div class="tsai-load"><div class="tsai-spin"></div><b>Stiamo creando la tua prova\u2026</b><span>Di solito servono 15-40 secondi</span></div></div>'
-        + '<div class="tsai-acts"><button class="tsai-a tsai-a1" disabled>Generazione in corso</button></div>';
+      setStep(2);
+      body.innerHTML = '<div class="tsai-pair">'
+        + cell('Tu', '<div class="tsai-frame"><img alt="La tua foto" src="' + userImg + '"></div>')
+        + ARROW
+        + cell(withLabel, '<div class="tsai-frame"><div class="tsai-load"><div class="tsai-spin"></div><b>Elaborazione in corso</b><span>Di solito servono 15-40 secondi</span></div></div>')
+        + '</div>'
+        + '<p class="tsai-note">Non chiudere questa finestra.</p>';
     }
 
     function stepResult(url) {
-      side.innerHTML = '<div class="tsai-lbl">Ecco come ti sta</div>'
-        + '<div class="tsai-frame"><img alt="Risultato prova virtuale" src="' + esc(url) + '"></div>'
+      setStep(3);
+      body.innerHTML = '<div class="tsai-pair">'
+        + cell('Tu', '<div class="tsai-frame"><img alt="La tua foto" src="' + userImg + '"></div>')
+        + ARROW
+        + cell(withLabel, '<div class="tsai-frame"><img alt="Risultato prova virtuale" src="' + esc(url) + '"></div>')
+        + '</div>'
+        + '<p class="tsai-note">Risultato generato dall\'AI: colori e proporzioni potrebbero variare leggermente dal prodotto reale.</p>'
         + '<div class="tsai-acts">'
+        + '<button class="tsai-a tsai-a2 tsai-again">Prova un\'altra foto</button>'
         + '<button class="tsai-a tsai-a1 tsai-cart">Aggiungi al carrello</button>'
-        + '<button class="tsai-a tsai-a2 tsai-again">Prova con un\'altra foto</button>'
         + '</div>';
-      side.querySelector('.tsai-again').onclick = function () { userImg = null; stepUpload(); };
-      side.querySelector('.tsai-cart').onclick = function () {
+      body.querySelector('.tsai-again').onclick = function () { userImg = null; stepUpload(); };
+      body.querySelector('.tsai-cart').onclick = function () {
         var b = this; b.disabled = true; b.textContent = 'Aggiunta\u2026';
         var root = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
         fetch(root + 'cart/add.js', {
@@ -363,15 +384,15 @@ function widgetMain(APP, SHOP_PARAM) {
           body: JSON.stringify({ items: [{ id: Number(variantId(product)), quantity: 1 }] })
         }).then(function (r) {
           if (!r.ok) throw new Error();
-          b.textContent = 'Aggiunto \u2713';
+          b.textContent = 'Aggiunto al carrello \u2713';
           setTimeout(function () { location.href = root + 'cart'; }, 700);
-        }).catch(function () { b.disabled = false; b.textContent = 'Aggiungi al carrello'; alertSide('Scegli taglia/variante nella pagina e riprova.'); });
+        }).catch(function () {
+          b.disabled = false; b.textContent = 'Aggiungi al carrello';
+          var e = document.createElement('div'); e.className = 'tsai-err';
+          e.textContent = 'Scegli taglia o variante nella pagina e riprova.';
+          body.appendChild(e);
+        });
       };
-    }
-
-    function alertSide(msg) {
-      var e = document.createElement('div'); e.className = 'tsai-err'; e.textContent = msg;
-      side.appendChild(e);
     }
 
     function generate() {
