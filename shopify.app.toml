@@ -1,0 +1,32 @@
+# Configurazione app TryStyleAI — usata da `shopify app deploy`
+# ATTENZIONE: il deploy sovrascrive la configurazione nel Partner Dashboard.
+
+client_id = "8cc69e33dd6444c334c764b246282af9"
+name = "TryStyleAI"
+handle = "trystyleai"
+application_url = "https://trystyleai-vercel.vercel.app/api/app"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "read_orders,read_products,read_script_tags,write_script_tags"
+
+[auth]
+redirect_urls = [ "https://trystyleai-vercel.vercel.app/api/install" ]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "https://trystyleai-vercel.vercel.app/api/webhooks"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled", "app_subscriptions/update" ]
+  uri = "https://trystyleai-vercel.vercel.app/api/webhooks"
+
+[pos]
+embedded = false
