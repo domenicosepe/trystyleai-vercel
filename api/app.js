@@ -249,14 +249,17 @@ module.exports = (req, res) => {
     getIdToken(function(freshTok) {
       console.log('[TryStyleAI] freshTok tipo:', freshTok ? (freshTok.indexOf('__oauth__') === 0 ? 'oauth' : 'jwt') : 'null');
       console.log('[TryStyleAI] freshTok lunghezza:', freshTok ? freshTok.length : 0);
-      var params = 'action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey;
+
+      // POST con JSON body — evita troncamento URL del session_token (JWT ~600 char)
+      var body = { action: 'subscribe', shop: shop, plan: planKey };
       if (freshTok && freshTok.indexOf('__oauth__') !== 0) {
-        params += '&session_token=' + encodeURIComponent(freshTok);
+        body.session_token = freshTok;
       }
-      console.log('[TryStyleAI] XHR params (senza token):', 'action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey);
+      console.log('[TryStyleAI] POST body keys:', Object.keys(body).join(','));
 
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/billing?' + params);
+      xhr.open('POST', '/api/billing');
+      xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.onload = function() {
         try {
           var data = JSON.parse(xhr.responseText);
@@ -285,7 +288,7 @@ module.exports = (req, res) => {
         btn.disabled = false;
         btn.textContent = 'Prova gratis';
       };
-      xhr.send();
+      xhr.send(JSON.stringify(body));
     });
   });
 

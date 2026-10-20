@@ -134,7 +134,13 @@ module.exports = async (req, res) => {
   // POST: parametri arrivano da query string (inviati come ?params nel POST)
   // GET: parametri da query string come al solito
 
-  const { action, shop, plan, session_token } = req.query;
+  // Supporta sia GET (query string) che POST (JSON body)
+  const q = req.query || {};
+  const b = (req.method === 'POST' && req.body) ? req.body : {};
+  const action = q.action || b.action;
+  const shop = q.shop || b.shop;
+  const plan = q.plan || b.plan;
+  const session_token = q.session_token || b.session_token;
 
   // ── Endpoint debug ────────────────────────────────────────
   // ── Endpoint clearkv ─────────────────────────────────────
