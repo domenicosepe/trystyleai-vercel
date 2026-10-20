@@ -256,7 +256,8 @@ module.exports = (req, res) => {
             if (window.top && window.top !== window) { window.top.location.href = d.confirmationUrl; }
             else { window.location.href = d.confirmationUrl; }
           } else {
-            alert('Errore: ' + (d.error || 'Risposta non valida'));
+            var det = d.detail ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : '';
+            alert('Errore (' + xhr.status + '): ' + (d.error || 'Risposta non valida') + (det ? '\\n\\nDettaglio: ' + det.substring(0, 400) : ''));
             btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis';
           }
         } catch(err) {
