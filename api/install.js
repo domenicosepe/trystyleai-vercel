@@ -5,7 +5,7 @@ const axios = require('axios');
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
-const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields,read_orders';
+const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields,read_orders,write_own_billing_subscriptions,read_own_billing_subscriptions';
 
 // Salva token su Upstash Redis (REST API, nessuna libreria extra)
 async function kvSet(key, value) {
