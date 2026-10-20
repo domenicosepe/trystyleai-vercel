@@ -301,8 +301,8 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error('Confirm error:', err.message);
     }
-    const host = Buffer.from(`${shop}/admin`).toString('base64');
-    return res.redirect(`/api/app?shop=${encodeURIComponent(shop)}&host=${host}`);
+    const shopName = shop.replace('.myshopify.com', '');
+    return res.redirect(`https://admin.shopify.com/store/${shopName}/apps/trystyleai`);
   }
 
   // ── Info piano corrente ───────────────────────────────────
