@@ -160,19 +160,35 @@ module.exports = async (req, res) => {
   console.log('TUTTI query params:', JSON.stringify(Object.keys(req.query)));
   if (session_token) console.log('session_token inizio:', session_token.substring(0, 30));
 
-  // Per subscribe serve token fresco (no KV fallback con token vecchi)
-  const requireFresh = (action === 'subscribe');
-  const token = await getValidToken(shop, session_token, requireFresh);
-  console.log('token ottenuto:', !!token, '| requireFresh:', requireFresh);
+  // Per subscribe serve token fresco via token exchange
+  let tokenExchangeResult = null;
+  let kvToken = null;
+  let finalToken = null;
 
-  // Se subscribe senza token → errore chiaro (non usare token vecchio da KV)
-  if (action === 'subscribe' && !token) {
-    console.log('Subscribe senza token valido — token exchange fallito o JWT assente');
-    return res.status(401).json({
-      error: 'Sessione scaduta. Reinstalla l\'app.',
-      redirectUrl: `${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`
-    });
+  if (session_token) {
+    tokenExchangeResult = await tokenExchange(session_token, shop);
+    if (tokenExchangeResult) {
+      await kvSet('token:' + shop, tokenExchangeResult);
+      finalToken = tokenExchangeResult;
+    }
   }
+
+  if (!finalToken) {
+    kvToken = await kvGet('token:' + shop);
+    finalToken = kvToken;
+  }
+
+  const token = finalToken;
+
+  // Diagnostica nella risposta se subscribe fallisce
+  const _debug = {
+    session_token_present: !!session_token,
+    session_token_length: session_token ? session_token.length : 0,
+    exchange_ok: !!tokenExchangeResult,
+    token_from_kv: !tokenExchangeResult && !!kvToken,
+    final_token_present: !!finalToken
+  };
+  console.log('diagnosi:', JSON.stringify(_debug));
 
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
@@ -226,7 +242,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       const detail = err.response?.data || err.message;
       console.error('Billing error:', JSON.stringify(detail));
-      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail });
+      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail, _debug });
     }
   }
 
