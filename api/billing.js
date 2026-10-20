@@ -61,15 +61,23 @@ async function tokenExchange(sessionJwt, shop) {
   return null;
 }
 
-// ── Verifica token con chiamata leggera ───────────────────
+// ── Verifica token con GraphQL (REST accetta ancora i vecchi token non-expiring) ─
 async function isTokenValid(shop, token) {
   try {
-    await axios.get(`https://${shop}/admin/api/2024-01/shop.json`,
-      { headers: { 'X-Shopify-Access-Token': token } });
+    const r = await axios.post(
+      `https://${shop}/admin/api/2024-01/graphql.json`,
+      { query: '{ shop { name } }' },
+      { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
+    );
+    // Se GraphQL risponde con errori di autenticazione nel body
+    if (r.data?.errors) {
+      console.log('Token validation GraphQL errors:', r.data.errors);
+      return false;
+    }
     return true;
   } catch(e) {
     const status = e.response?.status;
-    console.log('Token validation status:', status);
+    console.log('Token validation status:', status, e.response?.data?.errors || '');
     return false;
   }
 }
