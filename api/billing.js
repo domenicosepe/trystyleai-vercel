@@ -82,28 +82,26 @@ async function isTokenValid(shop, token) {
   }
 }
 
-// ── Ottieni token valido (KV → token exchange → KV update) ─
+// ── Ottieni token valido ─────────────────────────────────────
+// Se c'è il JWT session token: SEMPRE token exchange (garantisce token fresco)
+// Senza JWT: fallback su KV (per chiamate backend senza sessione utente)
 async function getValidToken(shop, sessionJwt) {
-  // 1. Prova da KV
-  let token = await kvGet('token:' + shop);
-  if (token) {
-    console.log('Token da KV, verifico validità...');
-    const valid = await isTokenValid(shop, token);
-    if (valid) {
-      console.log('Token KV valido');
-      return token;
-    }
-    console.log('Token KV non valido, faccio token exchange...');
-  }
-
-  // 2. Token exchange con JWT session token
+  // 1. Se c'è JWT, fai sempre token exchange → token garantito fresco
   if (sessionJwt) {
-    token = await tokenExchange(sessionJwt, shop);
+    console.log('JWT presente, faccio token exchange...');
+    const token = await tokenExchange(sessionJwt, shop);
     if (token) {
-      // Salva il nuovo token su KV
       await kvSet('token:' + shop, token);
       return token;
     }
+    console.log('Token exchange fallito, provo KV come fallback...');
+  }
+
+  // 2. Fallback: token da KV (senza sessione utente attiva)
+  const cached = await kvGet('token:' + shop);
+  if (cached) {
+    console.log('Token da KV (fallback senza JWT)');
+    return cached;
   }
 
   return null;
@@ -119,6 +117,12 @@ module.exports = async (req, res) => {
   const { action, shop, plan, session_token } = req.query;
 
   if (!shop) return res.status(400).json({ error: 'Shop mancante' });
+
+  // Log diagnostico
+  console.log('=== billing.js ===');
+  console.log('action:', action, '| shop:', shop, '| plan:', plan);
+  console.log('session_token presente:', !!session_token, '| lunghezza:', session_token ? session_token.length : 0);
+  if (session_token) console.log('session_token primi 50 char:', session_token.substring(0, 50));
 
   // Recupera token valido
   const token = await getValidToken(shop, session_token);
