@@ -64,6 +64,29 @@ module.exports = async (req, res) => {
     return res.json({ active: !reason, reason, ...cfg });
   }
 
+  // ── Diagnosi (nessun dato sensibile) ───────────────────
+  if (q.action === 'diag') {
+    res.setHeader('Cache-Control', 'no-store');
+    const shop = String(q.shop || '').toLowerCase();
+    if (!SHOP_RE.test(shop)) return res.status(400).json({ error: 'shop non valido' });
+    const out = { shop, widget_deployed: true, token_in_kv: false };
+    const token = await kvGet('token:' + shop);
+    out.token_in_kv = !!token;
+    if (token) {
+      const h = { headers: { 'X-Shopify-Access-Token': token } };
+      try {
+        const r = await axios.get(`https://${shop}/admin/api/2025-01/script_tags.json`, h);
+        out.script_tags = (r.data.script_tags || []).map(t => t.src);
+      } catch (e) { out.script_tags_error = e.response?.status || e.message; }
+      const meta = await getMeta(shop, token);
+      out.plan = meta.plan || null;
+      out.status = meta.status || null;
+      out.calls_used = meta.calls_used || null;
+      out.calls_limit = meta.calls_limit || null;
+    }
+    return res.json(out);
+  }
+
   // ── Script widget ──────────────────────────────────────
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=300');
