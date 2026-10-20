@@ -53,4 +53,16 @@ function parseStored(raw) {
   try { return sanitize(typeof raw === 'string' ? JSON.parse(raw) : raw); } catch (e) { return sanitize({}); }
 }
 
-module.exports = { FONTS, DEFAULTS, sanitize, parseStored };
+// Generazioni per piano (chiavi interne)
+const PLAN_CALLS = { basic: 80, pro: 250, premium: 840 };
+
+// "TryStyleAI Basic", "Basic", "Piano Pro", "Business"... → chiave interna
+function planKeyFromName(name) {
+  const n = String(name || '').toLowerCase();
+  if (/business|premium/.test(n)) return 'premium';
+  if (/\bpro\b/.test(n)) return 'pro';
+  if (/basic|base/.test(n)) return 'basic';
+  return null;
+}
+
+module.exports = { FONTS, DEFAULTS, sanitize, parseStored, PLAN_CALLS, planKeyFromName };

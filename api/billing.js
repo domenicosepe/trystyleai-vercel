@@ -1,6 +1,6 @@
 // api/billing.js — Shopify Billing API v2
 const axios = require('axios');
-const { FONTS, sanitize, parseStored } = require('./_config');
+const { FONTS, sanitize, parseStored, planKeyFromName } = require('./_config');
 
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
@@ -335,6 +335,14 @@ module.exports = async (req, res) => {
       const data = r.data.data?.appSubscriptionCreate;
       if (data?.userErrors?.length) {
         console.log('userErrors FULL:', JSON.stringify(data.userErrors));
+        // App impostata su Shopify App Pricing (Managed Pricing): i piani si scelgono
+        // nella pagina di Shopify, non si possono creare addebiti via API
+        const msg = data.userErrors.map(e => e.message).join(' ');
+        if (/app pricing|managed pricing/i.test(msg)) {
+          const storeHandle = shop.replace('.myshopify.com', '');
+          const appHandle = process.env.SHOPIFY_APP_HANDLE || 'trystyleai';
+          return res.json({ confirmationUrl: `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`, managed: true });
+        }
         return res.status(400).json({ error: data.userErrors[0].message, userErrors: data.userErrors, _debug });
       }
       if (!data) {
@@ -395,7 +403,7 @@ module.exports = async (req, res) => {
         console.log('activeSubscriptions:', JSON.stringify(subs), '| errors:', JSON.stringify(sr.data?.errors || null));
         if (Array.isArray(subs)) {
           const active = subs.find(s => s.status === 'ACTIVE');
-          const activeKey = active ? Object.keys(PLANS).find(k => PLANS[k].name === active.name) : null;
+          const activeKey = active ? planKeyFromName(active.name) : null;
           if (activeKey) {
             if (meta.plan !== activeKey || meta.status !== 'active') {
               // Nuovo piano o cambio piano → aggiorna metafield e azzera contatore

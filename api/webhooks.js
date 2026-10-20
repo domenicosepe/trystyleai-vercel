@@ -4,14 +4,15 @@
 //   eventi:     app/uninstalled, app_subscriptions/update
 const crypto = require('crypto');
 const { kvGet, kvSet, kvDel } = require('./_kv');
+const { PLAN_CALLS, planKeyFromName } = require('./_config');
+
+function planFromName(name) {
+  const key = planKeyFromName(name);
+  return key ? { key, calls: PLAN_CALLS[key] } : null;
+}
 
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
-const PLAN_BY_NAME = {
-  'TryStyleAI Basic': { key: 'basic', calls: 80 },
-  'TryStyleAI Pro': { key: 'pro', calls: 250 },
-  'TryStyleAI Business': { key: 'premium', calls: 840 }
-};
 
 // Body raw necessario per l'HMAC: niente parsing automatico
 module.exports.config = { api: { bodyParser: false } };
@@ -93,7 +94,7 @@ async function handler(req, res) {
         const sub = payload.app_subscription || {};
         const status = String(sub.status || '').toUpperCase();
         const id = sub.admin_graphql_api_id || null;
-        const plan = PLAN_BY_NAME[sub.name] || null;
+        const plan = planFromName(sub.name);
         console.log('app_subscriptions/update:', sub.name, status, id);
 
         if (status === 'ACTIVE' && plan) {
@@ -114,7 +115,7 @@ async function handler(req, res) {
             break;
           }
         } else if (live) {
-          const lp = PLAN_BY_NAME[live.name] || null;
+          const lp = planFromName(live.name);
           await kvSet('sub:' + shop, { status: 'ACTIVE', plan: lp ? lp.key : 'none', calls: lp ? lp.calls : 0, id: live.id, at: new Date().toISOString() });
           if (lp) await syncMeta(shop, 'ACTIVE', lp);
           console.log('Esiste ancora un abbonamento attivo:', live.name);
