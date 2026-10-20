@@ -1,4 +1,4 @@
-// api/billing.js — Shopify Billing API
+// api/billing.js — Shopify Billing API v2
 const axios = require('axios');
 
 const API_KEY = process.env.SHOPIFY_API_KEY;
@@ -119,13 +119,15 @@ module.exports = async (req, res) => {
   if (!shop) return res.status(400).json({ error: 'Shop mancante' });
 
   // Log diagnostico
-  console.log('=== billing.js ===');
+  console.log('=== billing.js v2 ===');
   console.log('action:', action, '| shop:', shop, '| plan:', plan);
   console.log('session_token presente:', !!session_token, '| lunghezza:', session_token ? session_token.length : 0);
-  if (session_token) console.log('session_token primi 50 char:', session_token.substring(0, 50));
+  console.log('TUTTI query params:', JSON.stringify(Object.keys(req.query)));
+  if (session_token) console.log('session_token inizio:', session_token.substring(0, 30));
 
   // Recupera token valido
   const token = await getValidToken(shop, session_token);
+  console.log('token ottenuto:', !!token);
 
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
