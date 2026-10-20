@@ -116,6 +116,9 @@ button,input,select{font:inherit;color:inherit}
 .step-t{font-weight:600}
 .step.done .step-t{color:var(--text-2)}
 .step-d{color:var(--text-2);margin:2px 0 8px}
+.howto{margin:6px 0 8px 18px;display:flex;flex-direction:column;gap:4px;color:var(--text-2)}
+.howto b,.step-d b{color:var(--text);font-weight:600}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
 .plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .plan{display:flex;flex-direction:column;gap:12px}
 .plan.current{box-shadow:0 0 0 2px var(--primary)}
@@ -239,6 +242,9 @@ function dashboardMain(BOOT) {
   function embedUrl() {
     return 'https://admin.shopify.com/store/' + shopName + '/themes/current/editor?context=apps&template=product&activateAppId=' + BOOT.apiKey + '/app-embed';
   }
+  function blockUrl() {
+    return 'https://admin.shopify.com/store/' + shopName + '/themes/current/editor?template=product&addAppBlockId=' + BOOT.apiKey + '/tryon-button&target=mainSection';
+  }
 
   function load() {
     if (!shop) {
@@ -302,7 +308,14 @@ function dashboardMain(BOOT) {
     // Guida
     h += '<div class="card"><div class="card-h"><div class="card-t">Guida alla configurazione</div><span class="subtle">' + (active ? '1' : '0') + ' di 3 completati</span></div><div class="steps">';
     h += step(active, 'Scegli un piano', 'Attiva l’abbonamento: la fatturazione è gestita da Shopify.', active ? '' : '<button class="btn btn-primary" data-tab="plans">Scegli un piano</button>');
-    h += step(false, 'Attiva il widget nel tema', 'Accendi TryStyleAI in Personalizza tema → Incorporamenti app e salva. Il bottone comparirà sotto “Aggiungi al carrello”.', '<a class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + '" target="_top" href="' + esc(embedUrl()) + '">Apri l’editor del tema</a>');
+    h += stepHtml(false, 'Attiva il widget nel tema',
+      '<ol class="howto">'
+      + '<li>Clicca <b>Attiva nel tema</b>: si apre l\u2019editor del tema con TryStyleAI già selezionato in <b>Incorporamenti app</b>.</li>'
+      + '<li>Controlla che l\u2019interruttore <b>TryStyleAI</b> sia acceso e clicca <b>Salva</b> in alto a destra.</li>'
+      + '<li>Apri una pagina prodotto del negozio: il bottone compare sotto \u201cAggiungi al carrello\u201d.</li>'
+      + '</ol><p class="step-d">Vuoi scegliere tu la posizione? Aggiungi invece il blocco <b>Bottone Prova outfit</b> nella sezione prodotto e trascinalo dove preferisci.</p>',
+      '<div class="acts"><a class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + '" target="_top" href="' + esc(embedUrl()) + '">Attiva nel tema</a>'
+      + '<a class="btn btn-secondary" target="_top" href="' + esc(blockUrl()) + '">Aggiungi il blocco alla pagina prodotto</a></div>');
     h += step(false, 'Personalizza l’aspetto', 'Testo, colori, font e arrotondamenti del bottone e della finestra di prova.', '<button class="btn btn-secondary" data-tab="customize">Personalizza</button>');
     h += '</div></div>';
 
@@ -330,10 +343,15 @@ function dashboardMain(BOOT) {
       h += '<p class="muted" style="margin-bottom:12px">Nessun piano attivo.</p><button class="btn btn-primary btn-block" data-tab="plans">Vedi i piani</button>';
     }
     h += '</div>';
-    h += '<div class="card"><div class="card-t" style="margin-bottom:6px">Serve aiuto?</div><p class="muted">Se il bottone non compare, verifica che l’incorporamento TryStyleAI sia attivo nel tema pubblicato e che il piano abbia generazioni disponibili.</p></div>';
+    h += '<div class="card"><div class="card-t" style="margin-bottom:6px">Il bottone non compare?</div><ul class="howto" style="margin-left:16px"><li>L\u2019incorporamento <b>TryStyleAI</b> deve essere attivo nel tema <b>pubblicato</b>, non in una copia.</li><li>Il piano deve essere attivo e avere generazioni disponibili.</li><li>Il bottone compare solo nelle pagine prodotto.</li></ul></div>';
     h += '</div></div>';
 
     $('panel-overview').innerHTML = h;
+  }
+
+  function stepHtml(done, title, descHtml, action) {
+    return '<div class="step' + (done ? ' done' : '') + '"><div class="step-ic">' + (done ? ICON_CHECK : '') + '</div>'
+      + '<div class="step-b"><div class="step-t">' + esc(title) + '</div><div class="step-d">' + descHtml + '</div>' + (done ? '' : action) + '</div></div>';
   }
 
   function step(done, title, desc, action) {

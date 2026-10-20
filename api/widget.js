@@ -1,4 +1,4 @@
-// api/widget.js — Script del negozio (caricato via ScriptTag) + endpoint config
+// api/widget.js — Script del negozio (caricato dall'estensione del tema) + endpoint config
 // GET /api/widget?shop=...              → JavaScript del widget
 // GET /api/widget?action=config&shop=... → { active, reason, btnText, btnColor, btnTextColor }
 const axios = require('axios');
@@ -90,23 +90,6 @@ module.exports = async (req, res) => {
     out.offline_last_error = await kvGet('offline_err:' + shop);
     if (token) {
       const h = { headers: { 'X-Shopify-Access-Token': token } };
-      try {
-        const r = await axios.get(`https://${shop}/admin/api/2025-01/script_tags.json`, h);
-        out.script_tags = (r.data.script_tags || []).map(t => t.src);
-      } catch (e) { out.script_tags_error = e.response?.status || e.message; }
-      // ?fix=1 → prova a registrare lo script e mostra l'errore esatto di Shopify
-      if (q.fix === '1' && Array.isArray(out.script_tags) && !out.script_tags.some(s => (s || '').split('?')[0] === APP_URL + '/api/widget')) {
-        try {
-          const c = await axios.post(`https://${shop}/admin/api/2025-01/script_tags.json`,
-            { script_tag: { event: 'onload', src: APP_URL + '/api/widget' } }, h);
-          out.fix_result = 'creato';
-          out.script_tags.push(c.data.script_tag && c.data.script_tag.src);
-        } catch (e) {
-          out.fix_result = 'errore';
-          out.fix_status = e.response?.status || null;
-          out.fix_error = e.response?.data || e.message;
-        }
-      }
       try {
         const r2 = await axios.get(`https://${shop}/admin/oauth/access_scopes.json`, h);
         out.granted_scopes = (r2.data.access_scopes || []).map(s => s.handle);

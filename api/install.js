@@ -5,7 +5,7 @@ const axios = require('axios');
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
-const SCOPES = 'write_script_tags,read_script_tags,read_products,write_metafields,read_metafields,read_orders,write_own_billing_subscriptions,read_own_billing_subscriptions';
+const SCOPES = 'read_products';
 
 // Salva token su Upstash Redis (REST API, nessuna libreria extra)
 async function kvSet(key, value) {
@@ -66,13 +66,6 @@ module.exports = async (req, res) => {
     await setMetafieldIfEmpty(shop, accessToken, 'calls_limit', '0');
     await setMetafieldIfEmpty(shop, accessToken, 'plan', 'none');
     await setMetafieldIfEmpty(shop, accessToken, 'status', 'pending');
-
-    // Installa script tag
-    try {
-      await axios.post(`https://${shop}/admin/api/2025-01/script_tags.json`, {
-        script_tag: { event: 'onload', src: `${APP_URL}/api/widget` }
-      }, { headers: { 'X-Shopify-Access-Token': accessToken } });
-    } catch(e) {}
 
     // I webhook (GDPR, app/uninstalled, app_subscriptions/update) sono dichiarati in
     // shopify.app.toml: i topic di conformità non si possono registrare via API.

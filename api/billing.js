@@ -391,7 +391,6 @@ module.exports = async (req, res) => {
       });
     }
     try {
-      await ensureScriptTag(shop, token);
       const meta = await getMeta(shop, token);
 
       // Fonte di verità: abbonamenti attivi su Shopify
@@ -495,24 +494,6 @@ module.exports = async (req, res) => {
 
   res.status(400).json({ error: 'Azione non valida' });
 };
-
-// ── ScriptTag del widget: registra se manca ───────────────
-async function ensureScriptTag(shop, token) {
-  const src = `${APP_URL}/api/widget`;
-  const h = { headers: { 'X-Shopify-Access-Token': token } };
-  try {
-    const r = await axios.get(`https://${shop}/admin/api/2025-01/script_tags.json`, h);
-    const tags = r.data.script_tags || [];
-    if (tags.some(t => (t.src || '').split('?')[0] === src)) return true;
-    await axios.post(`https://${shop}/admin/api/2025-01/script_tags.json`,
-      { script_tag: { event: 'onload', src } }, h);
-    console.log('ScriptTag widget registrato per', shop);
-    return true;
-  } catch (e) {
-    console.log('ensureScriptTag errore:', e.response?.status, JSON.stringify(e.response?.data || e.message));
-    return false;
-  }
-}
 
 // ── Metafield helpers ─────────────────────────────────────
 async function getMeta(shop, token) {
