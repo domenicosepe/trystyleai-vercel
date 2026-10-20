@@ -59,7 +59,7 @@ async function tokenExchange(sessionJwt, shop) {
       subject_token: sessionJwt,
       subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-      requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+      requested_token_type: 'urn:shopify:params:oauth:token-type:online-access-token'
     });
     const t = r.data.access_token;
     if (t) {
@@ -165,7 +165,7 @@ module.exports = async (req, res) => {
           subject_token: session_token,
           subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
           grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-          requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+          requested_token_type: 'urn:shopify:params:oauth:token-type:online-access-token'
         });
         result.exchange_ok = true;
         result.token_prefix = r.data.access_token ? r.data.access_token.substring(0, 10) : 'none';
