@@ -1,6 +1,8 @@
 // api/billing.js — Shopify Billing API
 const axios = require('axios');
 
+const API_KEY = process.env.SHOPIFY_API_KEY;
+const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
 
 const PLANS = {
@@ -9,15 +11,13 @@ const PLANS = {
   premium: { name: 'TryStyleAI Business', price: 275.00, calls: 840, trialDays: 7 }
 };
 
-// Legge token da Upstash KV
+// ── Upstash KV ────────────────────────────────────────────
 async function kvGet(key) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   try {
-    // Upstash REST: POST con comando come array JSON
-    const r = await axios.post(`${url}`,
-      ['GET', key],
+    const r = await axios.post(url, ['GET', key],
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
     return r.data.result || null;
   } catch(e) {
@@ -26,38 +26,107 @@ async function kvGet(key) {
   }
 }
 
+async function kvSet(key, value) {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return;
+  try {
+    await axios.post(`${url}/set/${encodeURIComponent(key)}`, [value],
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+    console.log('KV set OK:', key);
+  } catch(e) {
+    console.log('KV set errore:', e.response?.data || e.message);
+  }
+}
+
+// ── Token exchange (JWT → OAuth offline token) ────────────
+async function tokenExchange(sessionJwt, shop) {
+  try {
+    const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+      client_id: API_KEY,
+      client_secret: API_SECRET,
+      subject_token: sessionJwt,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+    });
+    const t = r.data.access_token;
+    if (t) {
+      console.log('Token exchange OK per shop:', shop);
+      return t;
+    }
+  } catch(e) {
+    console.log('Token exchange errore:', e.response?.data || e.message);
+  }
+  return null;
+}
+
+// ── Verifica token con chiamata leggera ───────────────────
+async function isTokenValid(shop, token) {
+  try {
+    await axios.get(`https://${shop}/admin/api/2024-01/shop.json`,
+      { headers: { 'X-Shopify-Access-Token': token } });
+    return true;
+  } catch(e) {
+    const status = e.response?.status;
+    console.log('Token validation status:', status);
+    return false;
+  }
+}
+
+// ── Ottieni token valido (KV → token exchange → KV update) ─
+async function getValidToken(shop, sessionJwt) {
+  // 1. Prova da KV
+  let token = await kvGet('token:' + shop);
+  if (token) {
+    console.log('Token da KV, verifico validità...');
+    const valid = await isTokenValid(shop, token);
+    if (valid) {
+      console.log('Token KV valido');
+      return token;
+    }
+    console.log('Token KV non valido, faccio token exchange...');
+  }
+
+  // 2. Token exchange con JWT session token
+  if (sessionJwt) {
+    token = await tokenExchange(sessionJwt, shop);
+    if (token) {
+      // Salva il nuovo token su KV
+      await kvSet('token:' + shop, token);
+      return token;
+    }
+  }
+
+  return null;
+}
+
+// ── Handler principale ────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { action, shop, plan } = req.query;
-  let { token } = req.query;
+  const { action, shop, plan, session_token } = req.query;
 
-  // Se non arriva token in query, lo legge da KV usando lo shop
-  if (!token && shop) {
-    console.log('Cerco token su KV per shop:', shop);
-    token = await kvGet('token:' + shop);
-    if (token) {
-      console.log('Token trovato su KV');
-    } else {
-      console.log('Token NON trovato su KV');
-    }
-  }
+  if (!shop) return res.status(400).json({ error: 'Shop mancante' });
+
+  // Recupera token valido
+  const token = await getValidToken(shop, session_token);
 
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
-    if (!shop || !plan || !PLANS[plan]) {
-      return res.status(400).json({ error: 'Parametri non validi' });
+    if (!plan || !PLANS[plan]) {
+      return res.status(400).json({ error: 'Piano non valido' });
     }
     if (!token) {
-      const installUrl = `${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`;
-      return res.redirect(installUrl);
+      console.log('Nessun token valido, redirect a install');
+      return res.redirect(`${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`);
     }
 
     const p = PLANS[plan];
-    const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}&token=${encodeURIComponent(token)}`;
+    const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}`;
 
     const mutation = `
       mutation {
@@ -88,7 +157,11 @@ module.exports = async (req, res) => {
         { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
       );
       const data = r.data.data?.appSubscriptionCreate;
-      if (data?.userErrors?.length) return res.status(400).json({ error: data.userErrors[0].message });
+      if (data?.userErrors?.length) {
+        console.log('userErrors:', data.userErrors);
+        return res.status(400).json({ error: data.userErrors[0].message });
+      }
+      console.log('Subscription creata, redirect a confirmationUrl');
       return res.redirect(data.confirmationUrl);
     } catch (err) {
       const detail = err.response?.data || err.message;
@@ -101,7 +174,7 @@ module.exports = async (req, res) => {
   if (action === 'confirm') {
     try {
       const p = PLANS[plan];
-      if (p) {
+      if (p && token) {
         await updateMeta(shop, token, 'plan', plan);
         await updateMeta(shop, token, 'status', 'active');
         await updateMeta(shop, token, 'calls_limit', String(p.calls));
@@ -116,8 +189,6 @@ module.exports = async (req, res) => {
 
   // ── Info piano corrente ───────────────────────────────────
   if (action === 'current') {
-    if (!shop) return res.status(400).json({ error: 'Shop mancante' });
-
     if (!token) {
       return res.json({
         shop, plan: 'none', planName: 'Nessun piano', status: 'pending',
@@ -127,7 +198,6 @@ module.exports = async (req, res) => {
         }))
       });
     }
-
     try {
       const meta = await getMeta(shop, token);
       const p = PLANS[meta.plan] || null;
@@ -150,19 +220,19 @@ module.exports = async (req, res) => {
   // ── Cancella abbonamento ──────────────────────────────────
   if (action === 'cancel') {
     const body = req.body || {};
-    const subShop = body.shop || shop;
-    const subToken = body.token || token;
-    const subId = body.subId;
+    const subId = body.subId || req.query.subId;
     if (!subId) return res.status(400).json({ error: 'subId mancante' });
     const mutation = `mutation { appSubscriptionCancel(id: "${subId}") { appSubscription { id } } }`;
     try {
       await axios.post(
-        `https://${subShop}/admin/api/2024-01/graphql.json`,
+        `https://${shop}/admin/api/2024-01/graphql.json`,
         { query: mutation },
-        { headers: { 'X-Shopify-Access-Token': subToken, 'Content-Type': 'application/json' } }
+        { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
       );
-      await updateMeta(subShop, subToken, 'status', 'cancelled');
-      await updateMeta(subShop, subToken, 'plan', 'none');
+      if (token) {
+        await updateMeta(shop, token, 'status', 'cancelled');
+        await updateMeta(shop, token, 'plan', 'none');
+      }
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: 'Errore cancellazione' });
@@ -172,12 +242,12 @@ module.exports = async (req, res) => {
   res.status(400).json({ error: 'Azione non valida' });
 };
 
+// ── Metafield helpers ─────────────────────────────────────
 async function getMeta(shop, token) {
   const result = {};
   try {
-    const r = await axios.get(`https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai`, {
-      headers: { 'X-Shopify-Access-Token': token }
-    });
+    const r = await axios.get(`https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai`,
+      { headers: { 'X-Shopify-Access-Token': token } });
     for (const mf of r.data.metafields || []) result[mf.key] = mf.value;
   } catch (e) {}
   return result;
@@ -187,19 +257,16 @@ async function updateMeta(shop, token, key, value) {
   try {
     const r = await axios.get(
       `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
-      { headers: { 'X-Shopify-Access-Token': token } }
-    );
+      { headers: { 'X-Shopify-Access-Token': token } });
     const mf = r.data.metafields?.[0];
     if (mf) {
       await axios.put(`https://${shop}/admin/api/2024-01/metafields/${mf.id}.json`,
         { metafield: { id: mf.id, value, type: 'single_line_text_field' } },
-        { headers: { 'X-Shopify-Access-Token': token } }
-      );
+        { headers: { 'X-Shopify-Access-Token': token } });
     } else {
       await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
         { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
-        { headers: { 'X-Shopify-Access-Token': token } }
-      );
+        { headers: { 'X-Shopify-Access-Token': token } });
     }
   } catch (e) {}
 }

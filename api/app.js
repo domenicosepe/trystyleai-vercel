@@ -236,14 +236,24 @@ module.exports = (req, res) => {
   document.addEventListener('click', function(e) {
     var btn = e.target.closest('.subscribe-btn');
     if (!btn) return;
-    var url = btn.getAttribute('data-url');
-    if (!url) return;
-    // Per OAuth Shopify serve navigare nel top frame, non dentro l'admin embed
-    if (window.top && window.top !== window) {
-      window.top.location.href = url;
-    } else {
-      window.location.href = url;
-    }
+    var baseUrl = btn.getAttribute('data-url');
+    if (!baseUrl) return;
+
+    // Prende un token fresco al momento del click (il JWT scade in pochi minuti)
+    getIdToken(function(freshTok) {
+      var url = baseUrl;
+      if (freshTok && freshTok.indexOf('__oauth__') !== 0) {
+        // Sostituisce session_token con uno fresco
+        url = baseUrl.replace(/[&?]session_token=[^&]*/g, '');
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        url = url + sep + 'session_token=' + encodeURIComponent(freshTok);
+      }
+      if (window.top && window.top !== window) {
+        window.top.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    });
   });
 
   window.subscribePlan = function(planKey, url) {
