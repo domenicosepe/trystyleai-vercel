@@ -6,6 +6,17 @@ const FASHN_API_KEY = process.env.FASHN_API_KEY;
 const FASHN_URL = 'https://api.fashn.ai/v1';
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
+function kvDecode(val) {
+  // Valori salvati con JSON.stringify ('"shpua_..."', '"{\\"btnText\\":...}"') o vecchio wrapper '["..."]'
+  let v = val;
+  for (let i = 0; i < 3 && typeof v === 'string'; i++) {
+    const c = v.charAt(0);
+    if (c !== '"' && c !== '[') break;
+    try { const p = JSON.parse(v); v = Array.isArray(p) ? p[0] : p; } catch (e) { break; }
+  }
+  return v == null ? null : v;
+}
+
 async function kvGet(key) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -13,8 +24,7 @@ async function kvGet(key) {
   try {
     const r = await axios.post(url, ['GET', key],
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    let val = r.data.result || null;
-    if (val && val.startsWith('["') && val.endsWith('"]')) val = val.slice(2, -2);
+    const val = kvDecode(r.data.result || null);
     return val;
   } catch (e) { return null; }
 }
@@ -59,7 +69,7 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Parametri mancanti' });
   }
 
-  const token = await kvGet('token:' + shop);
+  const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
   if (!token) return res.status(403).json({ error: 'Servizio non disponibile per questo negozio.' });
 
   try {

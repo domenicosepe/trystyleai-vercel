@@ -160,6 +160,16 @@ module.exports = (req, res) => {
     fetchDashboard('');
     getToken(function(tok) {
       if (tok) fetchDashboard(tok);
+      // Secondo JWT separato: salva token offline per widget/try-on
+      // (dopo 3s, così non si sovrappone allo scambio della dashboard)
+      setTimeout(function() {
+        getToken(function(tok2) {
+          if (!tok2) return;
+          var x = new XMLHttpRequest();
+          x.open('GET', '/api/billing?action=store_offline&shop=' + encodeURIComponent(shop) + '&session_token=' + encodeURIComponent(tok2));
+          x.send();
+        });
+      }, 3000);
     });
   }
 

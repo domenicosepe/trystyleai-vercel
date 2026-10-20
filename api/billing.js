@@ -12,6 +12,17 @@ const PLANS = {
 };
 
 // ── Upstash KV ────────────────────────────────────────────
+function kvDecode(val) {
+  // Valori salvati con JSON.stringify ('"shpua_..."', '"{\\"btnText\\":...}"') o vecchio wrapper '["..."]'
+  let v = val;
+  for (let i = 0; i < 3 && typeof v === 'string'; i++) {
+    const c = v.charAt(0);
+    if (c !== '"' && c !== '[') break;
+    try { const p = JSON.parse(v); v = Array.isArray(p) ? p[0] : p; } catch (e) { break; }
+  }
+  return v == null ? null : v;
+}
+
 async function kvGet(key) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -19,12 +30,7 @@ async function kvGet(key) {
   try {
     const r = await axios.post(url, ['GET', key],
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    let val = r.data.result || null;
-    // Rimuovi eventuali parentesi quadre residue da bug kvSet precedente: ["shpat_..."] → shpat_...
-    if (val && val.startsWith('["') && val.endsWith('"]')) {
-      val = val.slice(2, -2);
-      console.log('KV get: rimosso wrapper array, token pulito');
-    }
+    const val = kvDecode(r.data.result || null);
     return val;
   } catch(e) {
     console.log('KV get errore:', e.response?.data || e.message);
@@ -180,6 +186,30 @@ module.exports = async (req, res) => {
   }
 
   if (!shop) return res.status(400).json({ error: 'Shop mancante' });
+
+  // ── Token offline (non scade) per widget e try-on ─────────
+  // Chiamata separata dalla dashboard con un suo JWT: non tocca il flusso abbonamento.
+  if (action === 'store_offline') {
+    if (!session_token) return res.status(400).json({ ok: false, error: 'session_token mancante' });
+    try {
+      const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+        client_id: API_KEY,
+        client_secret: API_SECRET,
+        subject_token: session_token,
+        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
+      });
+      const t = r.data.access_token;
+      if (!t) return res.json({ ok: false, error: 'nessun token' });
+      if (!(await isTokenValid(shop, t))) return res.json({ ok: false, error: 'token non valido' });
+      await kvSet('offline:' + shop, t);
+      return res.json({ ok: true, expires: r.data.expires_in || null });
+    } catch (e) {
+      console.log('store_offline errore:', e.response?.status, JSON.stringify(e.response?.data || e.message));
+      return res.json({ ok: false, status: e.response?.status || null });
+    }
+  }
 
   // Log diagnostico
   console.log('=== billing.js v2 ===');
@@ -412,7 +442,7 @@ module.exports = async (req, res) => {
   if (action === 'get_config') {
     try {
       const cfg = await kvGet('config:' + shop);
-      if (cfg) return res.json(JSON.parse(cfg));
+      if (cfg) return res.json(typeof cfg === 'string' ? JSON.parse(cfg) : cfg);
       return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });
     } catch (e) {
       return res.json({ btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' });

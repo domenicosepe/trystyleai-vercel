@@ -7,6 +7,17 @@ const APP_URL = process.env.APP_URL || 'https://trystyleai-vercel.vercel.app';
 const DEFAULT_CFG = { btnText: 'Prova questo outfit', btnColor: '#7b2ff7', btnTextColor: '#ffffff' };
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
+function kvDecode(val) {
+  // Valori salvati con JSON.stringify ('"shpua_..."', '"{\\"btnText\\":...}"') o vecchio wrapper '["..."]'
+  let v = val;
+  for (let i = 0; i < 3 && typeof v === 'string'; i++) {
+    const c = v.charAt(0);
+    if (c !== '"' && c !== '[') break;
+    try { const p = JSON.parse(v); v = Array.isArray(p) ? p[0] : p; } catch (e) { break; }
+  }
+  return v == null ? null : v;
+}
+
 async function kvGet(key) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
@@ -14,8 +25,7 @@ async function kvGet(key) {
   try {
     const r = await axios.post(url, ['GET', key],
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    let val = r.data.result || null;
-    if (val && val.startsWith('["') && val.endsWith('"]')) val = val.slice(2, -2);
+    const val = kvDecode(r.data.result || null);
     return val;
   } catch (e) { return null; }
 }
@@ -48,10 +58,10 @@ module.exports = async (req, res) => {
     let cfg = { ...DEFAULT_CFG };
     try {
       const raw = await kvGet('config:' + shop);
-      if (raw) cfg = { ...cfg, ...JSON.parse(raw) };
+      if (raw) cfg = { ...cfg, ...(typeof raw === 'string' ? JSON.parse(raw) : raw) };
     } catch (e) {}
 
-    const token = await kvGet('token:' + shop);
+    const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
     if (!token) return res.json({ active: false, reason: 'token', ...cfg });
 
     const meta = await getMeta(shop, token);
@@ -70,8 +80,9 @@ module.exports = async (req, res) => {
     const shop = String(q.shop || '').toLowerCase();
     if (!SHOP_RE.test(shop)) return res.status(400).json({ error: 'shop non valido' });
     const out = { shop, widget_deployed: true, token_in_kv: false };
-    const token = await kvGet('token:' + shop);
+    const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
     out.token_in_kv = !!token;
+    out.offline_token = !!(await kvGet('offline:' + shop));
     if (token) {
       const h = { headers: { 'X-Shopify-Access-Token': token } };
       try {
