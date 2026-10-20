@@ -208,14 +208,16 @@ module.exports = (req, res) => {
       var isPlnActive = p.key === data.plan && (isActive || isTrial);
       html += '<div class="plan-card ' + (isPlnActive ? 'plan-active' : '') + ' ' + (p.key === 'pro' ? 'popular' : '') + '">';
       html += '<div class="plan-name">' + p.name + '</div>';
-      html += '<div class="plan-price">E' + p.price + '<span>/mese</span></div>';
+      html += '<div class="plan-price">&euro;' + p.price + '<span>/mese</span></div>';
       html += '<div class="plan-calls">' + p.calls + ' generazioni/mese</div>';
       html += '<ul class="plan-features"><li>Virtual Try-On con AI</li><li>Installazione automatica</li><li>Dashboard analytics</li></ul>';
       if (isPlnActive) {
         html += '<div class="btn btn-active">Piano attuale</div>';
       } else {
-        html += '<button data-plan="' + p.key + '" class="btn btn-primary sub-btn">Prova gratis ' + p.trialDays + ' giorni</button>';
-        html += '<div class="trial-note">Poi E' + p.price + '/mese - Annulla quando vuoi</div>';
+        var hasPlan = data.plan && data.plan !== 'none' && (isActive || isTrial);
+        var lbl = hasPlan ? ('Passa a ' + p.name.replace('TryStyleAI ', '')) : ('Prova gratis ' + p.trialDays + ' giorni');
+        html += '<button data-plan="' + p.key + '" data-label="' + lbl + '" class="btn btn-primary sub-btn">' + lbl + '</button>';
+        html += '<div class="trial-note">' + (hasPlan ? '&euro;' + p.price + '/mese - Annulla quando vuoi' : 'Poi &euro;' + p.price + '/mese - Annulla quando vuoi') + '</div>';
       }
       html += '</div>';
     });
@@ -238,7 +240,7 @@ module.exports = (req, res) => {
     function doSubscribe(tok) {
       if (!tok) {
         alert('Sessione scaduta. Ricarica la pagina e riprova.');
-        btn.disabled = false; btn.textContent = 'Prova gratis';
+        btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis';
         return;
       }
       var url = '/api/billing?action=subscribe&shop=' + encodeURIComponent(shop)
@@ -255,15 +257,15 @@ module.exports = (req, res) => {
             else { window.location.href = d.confirmationUrl; }
           } else {
             alert('Errore: ' + (d.error || 'Risposta non valida'));
-            btn.disabled = false; btn.textContent = 'Prova gratis';
+            btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis';
           }
         } catch(err) {
           alert('Errore imprevisto');
-          btn.disabled = false; btn.textContent = 'Prova gratis';
+          btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis';
         }
       };
-      xhr.ontimeout = function() { alert('Timeout. Riprova.'); btn.disabled = false; btn.textContent = 'Prova gratis'; };
-      xhr.onerror = function() { alert('Errore di rete'); btn.disabled = false; btn.textContent = 'Prova gratis'; };
+      xhr.ontimeout = function() { alert('Timeout. Riprova.'); btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis'; };
+      xhr.onerror = function() { alert('Errore di rete'); btn.disabled = false; btn.textContent = btn.getAttribute('data-label') || 'Prova gratis'; };
       xhr.send();
     }
 
