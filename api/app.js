@@ -106,11 +106,19 @@ module.exports = (req, res) => {
   });
 
   function getToken(cb) {
-    if (window.shopify && window.shopify.idToken) {
-      window.shopify.idToken().then(function(t) { cb(t); }).catch(function() { cb(''); });
-    } else {
-      cb('');
-    }
+    var done = false;
+    function finish(t) { if (!done) { done = true; cb(t || ''); } }
+    // Timeout: se idToken non risponde in 3s, vai avanti senza token
+    var timeout = setTimeout(function() { finish(''); }, 3000);
+    try {
+      if (window.shopify && window.shopify.idToken) {
+        window.shopify.idToken()
+          .then(function(t) { clearTimeout(timeout); finish(t); })
+          .catch(function() { clearTimeout(timeout); finish(''); });
+      } else {
+        clearTimeout(timeout); finish('');
+      }
+    } catch(e) { clearTimeout(timeout); finish(''); }
   }
 
   var DEFAULT_PLANS = [
@@ -127,12 +135,12 @@ module.exports = (req, res) => {
     }
     var fromConfirm = urlParams.get('confirmed') === '1';
 
-    getToken(function(tok) {
+    function fetchDashboard(tok) {
       var url = '/api/billing?action=current&shop=' + encodeURIComponent(shop);
       if (tok) url += '&session_token=' + encodeURIComponent(tok);
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url);
-      xhr.timeout = 10000;
+      xhr.timeout = 8000;
       xhr.onload = function() {
         try {
           var d = JSON.parse(xhr.responseText);
@@ -146,6 +154,12 @@ module.exports = (req, res) => {
         renderDashboard({ shop: shop, plan: 'none', planName: 'Nessun piano', status: 'none', callsUsed: 0, callsLimit: 0, plans: DEFAULT_PLANS }, tok, fromConfirm);
       };
       xhr.send();
+    }
+
+    // Prima carica subito senza token (usa KV), poi ricarica con token se disponibile
+    fetchDashboard('');
+    getToken(function(tok) {
+      if (tok) fetchDashboard(tok);
     });
   }
 
