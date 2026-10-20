@@ -351,6 +351,44 @@ module.exports = async (req, res) => {
     }
     try {
       const meta = await getMeta(shop, token);
+
+      // Fonte di verità: abbonamenti attivi su Shopify
+      try {
+        const sq = `{ currentAppInstallation { activeSubscriptions { id name status } } }`;
+        const sr = await axios.post(`https://${shop}/admin/api/2025-01/graphql.json`,
+          { query: sq }, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+        const subs = sr.data?.data?.currentAppInstallation?.activeSubscriptions;
+        console.log('activeSubscriptions:', JSON.stringify(subs), '| errors:', JSON.stringify(sr.data?.errors || null));
+        if (Array.isArray(subs)) {
+          const active = subs.find(s => s.status === 'ACTIVE');
+          const activeKey = active ? Object.keys(PLANS).find(k => PLANS[k].name === active.name) : null;
+          if (activeKey) {
+            if (meta.plan !== activeKey || meta.status !== 'active') {
+              // Nuovo piano o cambio piano → aggiorna metafield e azzera contatore
+              await updateMeta(shop, token, 'plan', activeKey);
+              await updateMeta(shop, token, 'status', 'active');
+              await updateMeta(shop, token, 'calls_limit', String(PLANS[activeKey].calls));
+              if (meta.plan !== activeKey) {
+                await updateMeta(shop, token, 'calls_used', '0');
+                meta.calls_used = '0';
+              }
+              meta.plan = activeKey;
+              meta.status = 'active';
+              meta.calls_limit = String(PLANS[activeKey].calls);
+            }
+            meta.subId = active.id;
+          } else if (meta.status === 'active') {
+            // Nessun abbonamento attivo su Shopify → disattiva
+            await updateMeta(shop, token, 'status', 'cancelled');
+            await updateMeta(shop, token, 'plan', 'none');
+            meta.status = 'cancelled';
+            meta.plan = 'none';
+          }
+        }
+      } catch (e) {
+        console.log('Errore lettura activeSubscriptions:', e.response?.status, JSON.stringify(e.response?.data || e.message));
+      }
+
       const p = PLANS[meta.plan] || null;
       return res.json({
         shop,
@@ -359,6 +397,7 @@ module.exports = async (req, res) => {
         status: meta.status || 'pending',
         callsUsed: parseInt(meta.calls_used || '0'),
         callsLimit: parseInt(meta.calls_limit || '0'),
+        subId: meta.subId || null,
         plans: Object.entries(PLANS).map(([key, pl]) => ({
           key, name: pl.name, price: pl.price, calls: pl.calls, trialDays: pl.trialDays
         }))
@@ -452,5 +491,7 @@ async function updateMeta(shop, token, key, value) {
         { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } });
     }
-  } catch (e) {}
+  } catch (e) {
+    console.log('updateMeta errore', key, e.response?.status, JSON.stringify(e.response?.data || e.message));
+  }
 }
