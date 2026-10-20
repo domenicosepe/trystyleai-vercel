@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
 
     // Installa script tag
     try {
-      await axios.post(`https://${shop}/admin/api/2024-01/script_tags.json`, {
+      await axios.post(`https://${shop}/admin/api/2025-01/script_tags.json`, {
         script_tag: { event: 'onload', src: `${APP_URL}/api/widget` }
       }, { headers: { 'X-Shopify-Access-Token': accessToken } });
     } catch(e) {}
@@ -87,17 +87,17 @@ module.exports = async (req, res) => {
 async function setMetafield(shop, token, key, value) {
   try {
     const r = await axios.get(
-      `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
+      `https://${shop}/admin/api/2025-01/metafields.json?namespace=trystyleai&key=${key}`,
       { headers: { 'X-Shopify-Access-Token': token } }
     );
     const mf = r.data.metafields?.[0];
     if (mf) {
-      await axios.put(`https://${shop}/admin/api/2024-01/metafields/${mf.id}.json`,
+      await axios.put(`https://${shop}/admin/api/2025-01/metafields/${mf.id}.json`,
         { metafield: { id: mf.id, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } }
       );
     } else {
-      await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
+      await axios.post(`https://${shop}/admin/api/2025-01/metafields.json`,
         { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } }
       );
@@ -108,11 +108,11 @@ async function setMetafield(shop, token, key, value) {
 async function setMetafieldIfEmpty(shop, token, key, value) {
   try {
     const r = await axios.get(
-      `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
+      `https://${shop}/admin/api/2025-01/metafields.json?namespace=trystyleai&key=${key}`,
       { headers: { 'X-Shopify-Access-Token': token } }
     );
     if (!r.data.metafields?.length) {
-      await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
+      await axios.post(`https://${shop}/admin/api/2025-01/metafields.json`,
         { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } }
       );

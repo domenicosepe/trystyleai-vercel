@@ -80,7 +80,7 @@ async function tokenExchange(sessionJwt, shop) {
 async function isTokenValid(shop, token) {
   try {
     const r = await axios.post(
-      `https://${shop}/admin/api/2024-01/graphql.json`,
+      `https://${shop}/admin/api/2025-01/graphql.json`,
       { query: '{ shop { name } }' },
       { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
     );
@@ -235,6 +235,7 @@ module.exports = async (req, res) => {
     const p = PLANS[plan];
     const returnUrl = `${APP_URL}/api/billing?action=confirm&shop=${encodeURIComponent(shop)}&plan=${plan}`;
 
+    // Versione API 2025-01 — supporta expiring offline tokens
     const mutation = `
       mutation {
         appSubscriptionCreate(
@@ -260,7 +261,7 @@ module.exports = async (req, res) => {
     console.log('Token usato (primi 15 char):', token ? token.substring(0, 15) : 'null');
     try {
       const r = await axios.post(
-        `https://${shop}/admin/api/2024-01/graphql.json`,
+        `https://${shop}/admin/api/2025-01/graphql.json`,
         { query: mutation },
         { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
       );
@@ -337,7 +338,7 @@ module.exports = async (req, res) => {
     const mutation = `mutation { appSubscriptionCancel(id: "${subId}") { appSubscription { id } } }`;
     try {
       await axios.post(
-        `https://${shop}/admin/api/2024-01/graphql.json`,
+        `https://${shop}/admin/api/2025-01/graphql.json`,
         { query: mutation },
         { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
       );
@@ -358,7 +359,7 @@ module.exports = async (req, res) => {
 async function getMeta(shop, token) {
   const result = {};
   try {
-    const r = await axios.get(`https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai`,
+    const r = await axios.get(`https://${shop}/admin/api/2025-01/metafields.json?namespace=trystyleai`,
       { headers: { 'X-Shopify-Access-Token': token } });
     for (const mf of r.data.metafields || []) result[mf.key] = mf.value;
   } catch (e) {}
@@ -368,15 +369,15 @@ async function getMeta(shop, token) {
 async function updateMeta(shop, token, key, value) {
   try {
     const r = await axios.get(
-      `https://${shop}/admin/api/2024-01/metafields.json?namespace=trystyleai&key=${key}`,
+      `https://${shop}/admin/api/2025-01/metafields.json?namespace=trystyleai&key=${key}`,
       { headers: { 'X-Shopify-Access-Token': token } });
     const mf = r.data.metafields?.[0];
     if (mf) {
-      await axios.put(`https://${shop}/admin/api/2024-01/metafields/${mf.id}.json`,
+      await axios.put(`https://${shop}/admin/api/2025-01/metafields/${mf.id}.json`,
         { metafield: { id: mf.id, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } });
     } else {
-      await axios.post(`https://${shop}/admin/api/2024-01/metafields.json`,
+      await axios.post(`https://${shop}/admin/api/2025-01/metafields.json`,
         { metafield: { namespace: 'trystyleai', key, value, type: 'single_line_text_field' } },
         { headers: { 'X-Shopify-Access-Token': token } });
     }
