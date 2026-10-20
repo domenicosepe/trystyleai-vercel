@@ -19,7 +19,13 @@ async function kvGet(key) {
   try {
     const r = await axios.post(url, ['GET', key],
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
-    return r.data.result || null;
+    let val = r.data.result || null;
+    // Rimuovi eventuali parentesi quadre residue da bug kvSet precedente: ["shpat_..."] → shpat_...
+    if (val && val.startsWith('["') && val.endsWith('"]')) {
+      val = val.slice(2, -2);
+      console.log('KV get: rimosso wrapper array, token pulito');
+    }
+    return val;
   } catch(e) {
     console.log('KV get errore:', e.response?.data || e.message);
     return null;
@@ -31,7 +37,10 @@ async function kvSet(key, value) {
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return;
   try {
-    await axios.post(`${url}/set/${encodeURIComponent(key)}`, [value],
+    // Upstash REST: POST a /set/{key} con body {"value": value} oppure stringa diretta
+    // NON usare array [value] — verrebbe serializzato come '["shpat_..."]'
+    await axios.post(`${url}/set/${encodeURIComponent(key)}`,
+      JSON.stringify(value),
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
     console.log('KV set OK:', key);
   } catch(e) {

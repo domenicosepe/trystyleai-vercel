@@ -14,7 +14,7 @@ async function kvSet(key, value) {
   if (!url || !token) { console.log('KV non configurato'); return; }
   try {
     await axios.post(`${url}/set/${encodeURIComponent(key)}`,
-      [value],
+      JSON.stringify(value),
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
     console.log('KV set OK:', key);
   } catch(e) {
