@@ -247,10 +247,13 @@ module.exports = (req, res) => {
     // Prende token fresco al click e fa fetch XHR (non navigazione top-frame)
     // così il session_token arriva correttamente al backend
     getIdToken(function(freshTok) {
+      console.log('[TryStyleAI] freshTok tipo:', freshTok ? (freshTok.indexOf('__oauth__') === 0 ? 'oauth' : 'jwt') : 'null');
+      console.log('[TryStyleAI] freshTok lunghezza:', freshTok ? freshTok.length : 0);
       var params = 'action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey;
       if (freshTok && freshTok.indexOf('__oauth__') !== 0) {
         params += '&session_token=' + encodeURIComponent(freshTok);
       }
+      console.log('[TryStyleAI] XHR params (senza token):', 'action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey);
 
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/billing?' + params);
