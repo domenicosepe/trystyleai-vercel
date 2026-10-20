@@ -128,6 +128,15 @@ module.exports = async (req, res) => {
   const { action, shop, plan, session_token } = req.query;
 
   // ── Endpoint debug ────────────────────────────────────────
+  // ── Endpoint clearkv ─────────────────────────────────────
+  if (action === 'clearkv') {
+    const key = 'token:' + shop;
+    const old = await kvGet(key);
+    // Sovrascrive con stringa vuota (DELETE non supportato facilmente)
+    await kvSet(key, '');
+    return res.json({ cleared: true, had_token: !!old, old_prefix: old ? old.substring(0, 10) : 'none' });
+  }
+
   if (action === 'debug') {
     const result = { shop, session_token_length: session_token ? session_token.length : 0, api_key_present: !!API_KEY, api_secret_present: !!API_SECRET };
     if (session_token) {
@@ -229,6 +238,7 @@ module.exports = async (req, res) => {
       }
     `;
 
+    console.log('Token usato (primi 15 char):', token ? token.substring(0, 15) : 'null');
     try {
       const r = await axios.post(
         `https://${shop}/admin/api/2024-01/graphql.json`,
@@ -246,7 +256,8 @@ module.exports = async (req, res) => {
     } catch (err) {
       const detail = err.response?.data || err.message;
       console.error('Billing error:', JSON.stringify(detail));
-      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail, _debug });
+      const _debug2 = { ..._debug, token_prefix: token ? token.substring(0, 15) : 'null' };
+      return res.status(500).json({ error: 'Errore creazione abbonamento: ' + err.message, detail, _debug: _debug2 });
     }
   }
 
