@@ -83,25 +83,29 @@ async function isTokenValid(shop, token) {
 }
 
 // ── Ottieni token valido ─────────────────────────────────────
-// Se c'è il JWT session token: SEMPRE token exchange (garantisce token fresco)
-// Senza JWT: fallback su KV (per chiamate backend senza sessione utente)
-async function getValidToken(shop, sessionJwt) {
+// Se c'è JWT → sempre token exchange (token fresco garantito)
+// Senza JWT → token da KV solo per azioni non-subscribe (current, cancel)
+async function getValidToken(shop, sessionJwt, requireFresh) {
   // 1. Se c'è JWT, fai sempre token exchange → token garantito fresco
   if (sessionJwt) {
     console.log('JWT presente, faccio token exchange...');
     const token = await tokenExchange(sessionJwt, shop);
     if (token) {
       await kvSet('token:' + shop, token);
+      console.log('Token exchange OK, token fresco salvato in KV');
       return token;
     }
-    console.log('Token exchange fallito, provo KV come fallback...');
+    console.log('Token exchange fallito');
+    return null; // non usare KV come fallback se token exchange fallisce
   }
 
-  // 2. Fallback: token da KV (senza sessione utente attiva)
-  const cached = await kvGet('token:' + shop);
-  if (cached) {
-    console.log('Token da KV (fallback senza JWT)');
-    return cached;
+  // 2. Senza JWT: solo se non richiedfresh (es. current/cancel)
+  if (!requireFresh) {
+    const cached = await kvGet('token:' + shop);
+    if (cached) {
+      console.log('Token da KV (no JWT disponibile)');
+      return cached;
+    }
   }
 
   return null;
@@ -114,6 +118,9 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // POST: parametri arrivano da query string (inviati come ?params nel POST)
+  // GET: parametri da query string come al solito
+
   const { action, shop, plan, session_token } = req.query;
 
   if (!shop) return res.status(400).json({ error: 'Shop mancante' });
@@ -125,9 +132,10 @@ module.exports = async (req, res) => {
   console.log('TUTTI query params:', JSON.stringify(Object.keys(req.query)));
   if (session_token) console.log('session_token inizio:', session_token.substring(0, 30));
 
-  // Recupera token valido
-  const token = await getValidToken(shop, session_token);
-  console.log('token ottenuto:', !!token);
+  // Per subscribe serve token fresco (no KV fallback con token vecchi)
+  const requireFresh = (action === 'subscribe');
+  const token = await getValidToken(shop, session_token, requireFresh);
+  console.log('token ottenuto:', !!token, '| requireFresh:', requireFresh);
 
   // ── Crea abbonamento ──────────────────────────────────────
   if (action === 'subscribe') {
@@ -175,8 +183,9 @@ module.exports = async (req, res) => {
         console.log('userErrors:', data.userErrors);
         return res.status(400).json({ error: data.userErrors[0].message });
       }
-      console.log('Subscription creata, redirect a confirmationUrl');
-      return res.redirect(data.confirmationUrl);
+      console.log('Subscription creata, confirmationUrl:', data.confirmationUrl);
+      // Ritorna JSON con confirmationUrl — il frontend fa il redirect top-frame
+      return res.json({ confirmationUrl: data.confirmationUrl });
     } catch (err) {
       const detail = err.response?.data || err.message;
       console.error('Billing error:', JSON.stringify(detail));

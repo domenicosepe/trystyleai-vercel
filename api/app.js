@@ -236,23 +236,54 @@ module.exports = (req, res) => {
   document.addEventListener('click', function(e) {
     var btn = e.target.closest('.subscribe-btn');
     if (!btn) return;
-    var baseUrl = btn.getAttribute('data-url');
-    if (!baseUrl) return;
+    e.preventDefault();
 
-    // Prende un token fresco al momento del click (il JWT scade in pochi minuti)
+    var planKey = btn.getAttribute('data-plan');
+    if (!planKey) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Attendi...';
+
+    // Prende token fresco al click e fa fetch XHR (non navigazione top-frame)
+    // così il session_token arriva correttamente al backend
     getIdToken(function(freshTok) {
-      var url = baseUrl;
+      var params = 'action=subscribe&shop=' + encodeURIComponent(shop) + '&plan=' + planKey;
       if (freshTok && freshTok.indexOf('__oauth__') !== 0) {
-        // Sostituisce session_token con uno fresco
-        url = baseUrl.replace(/[&?]session_token=[^&]*/g, '');
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        url = url + sep + 'session_token=' + encodeURIComponent(freshTok);
+        params += '&session_token=' + encodeURIComponent(freshTok);
       }
-      if (window.top && window.top !== window) {
-        window.top.location.href = url;
-      } else {
-        window.location.href = url;
-      }
+
+      var xhr = new XMLHttpRequest();
+      // Usiamo POST per evitare che il session_token venga loggato/strippato
+      xhr.open('POST', '/api/billing?' + params);
+      xhr.onload = function() {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.confirmationUrl) {
+            // Redirect top-frame verso pagina conferma pagamento Shopify
+            if (window.top && window.top !== window) {
+              window.top.location.href = data.confirmationUrl;
+            } else {
+              window.location.href = data.confirmationUrl;
+            }
+          } else if (data.redirectUrl) {
+            window.location.href = data.redirectUrl;
+          } else if (data.error) {
+            alert('Errore: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = 'Prova gratis';
+          }
+        } catch(err) {
+          alert('Errore imprevisto');
+          btn.disabled = false;
+          btn.textContent = 'Prova gratis';
+        }
+      };
+      xhr.onerror = function() {
+        alert('Errore di rete');
+        btn.disabled = false;
+        btn.textContent = 'Prova gratis';
+      };
+      xhr.send();
     });
   });
 
