@@ -216,7 +216,7 @@ module.exports = (req, res) => {
 
     if (isActive || isTrial) {
       var shopName = shop.replace('.myshopify.com', '');
-      var embedUrl = 'https://admin.shopify.com/store/' + shopName + '/themes/current/editor?context=apps&template=product&activateAppId=' + encodeURIComponent((window.__TS_API_KEY || '') + '/app-embed');
+      var embedUrl = 'https://admin.shopify.com/store/' + shopName + '/themes/current/editor?context=apps&template=product&activateAppId=' + (window.__TS_API_KEY || '') + '/app-embed';
       html += '<div class="usage-card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">';
       html += '<div style="min-width:0;flex:1"><div style="font-weight:700;font-size:15px;margin-bottom:4px">Mostra il bottone nel negozio</div>';
       html += '<div style="font-size:13px;color:#6d7175">Attiva TryStyleAI in Personalizza tema &rarr; Incorporamenti app e salva. Testo e colori li scegli in Configura Widget.</div></div>';
