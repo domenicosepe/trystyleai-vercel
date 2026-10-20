@@ -1,0 +1,24 @@
+{% comment %}
+  TryStyleAI — Blocco app da posizionare nella sezione prodotto.
+  Il widget monta il bottone dentro questo contenitore invece che
+  sotto il form "Aggiungi al carrello".
+{% endcomment %}
+<div class="trystyleai-anchor" {{ block.shopify_attributes }}></div>
+<script
+  src="https://trystyleai-vercel.vercel.app/api/widget?shop={{ shop.permanent_domain | url_encode }}"
+  defer
+></script>
+
+{% schema %}
+{
+  "name": "Bottone Prova outfit",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Testo e colori del bottone si modificano dalla dashboard dell'app TryStyleAI."
+    }
+  ]
+}
+{% endschema %}

@@ -219,8 +219,10 @@ function widgetMain(APP, SHOP_PARAM) {
     btn.textContent = cfg.btnText;
     btn.addEventListener('click', function (e) { e.preventDefault(); openModal(cfg, product, btn); });
 
+    var anchor = document.querySelector('.trystyleai-anchor');
     var form = findForm();
-    if (form) form.parentNode.insertBefore(btn, form.nextSibling);
+    if (anchor) anchor.appendChild(btn);
+    else if (form) form.parentNode.insertBefore(btn, form.nextSibling);
     else { btn.className += ' tsai-float'; document.body.appendChild(btn); }
   }
 

@@ -1,0 +1,24 @@
+{% comment %}
+  TryStyleAI — App embed (Personalizza tema → Incorporamenti app)
+  Carica il widget solo nelle pagine prodotto. Testo e colori del bottone
+  si configurano dalla dashboard dell'app.
+{% endcomment %}
+{% if request.page_type == 'product' %}
+  <script
+    src="https://trystyleai-vercel.vercel.app/api/widget?shop={{ shop.permanent_domain | url_encode }}"
+    defer
+  ></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "TryStyleAI",
+  "target": "body",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Mostra il bottone di prova virtuale sotto \"Aggiungi al carrello\" nelle pagine prodotto. Testo e colori si modificano dalla dashboard dell'app TryStyleAI. Per scegliere la posizione, aggiungi il blocco \"Bottone Prova outfit\" nella sezione prodotto."
+    }
+  ]
+}
+{% endschema %}

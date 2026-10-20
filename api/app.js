@@ -3,6 +3,8 @@ module.exports = (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com");
+  // Client ID pubblico dell'app (letto da env, non hardcoded)
+  const apiKey = String(process.env.SHOPIFY_API_KEY || '').replace(/[^a-zA-Z0-9]/g, '');
 
   const css = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -212,6 +214,16 @@ module.exports = (req, res) => {
       html += '</div>';
     }
 
+    if (isActive || isTrial) {
+      var shopName = shop.replace('.myshopify.com', '');
+      var embedUrl = 'https://admin.shopify.com/store/' + shopName + '/themes/current/editor?context=apps&template=product&activateAppId=' + encodeURIComponent((window.__TS_API_KEY || '') + '/app-embed');
+      html += '<div class="usage-card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">';
+      html += '<div style="min-width:0;flex:1"><div style="font-weight:700;font-size:15px;margin-bottom:4px">Mostra il bottone nel negozio</div>';
+      html += '<div style="font-size:13px;color:#6d7175">Attiva TryStyleAI in Personalizza tema &rarr; Incorporamenti app e salva. Testo e colori li scegli in Configura Widget.</div></div>';
+      html += '<a class="btn btn-primary" style="width:auto;padding:10px 18px" target="_top" href="' + embedUrl + '">Attiva nel tema</a>';
+      html += '</div>';
+    }
+
     html += '<div class="section-title">' + (data.plan === 'none' ? 'Scegli il tuo piano' : 'Cambia piano') + '</div>';
     html += '<div class="plans-grid">';
     (data.plans || DEFAULT_PLANS).forEach(function(p) {
@@ -387,6 +399,8 @@ module.exports = (req, res) => {
     '<meta charset="UTF-8">\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
     '<title>TryStyleAI</title>\n' +
+    '<meta name="shopify-api-key" content="' + apiKey + '">\n' +
+    '<script>window.__TS_API_KEY = ' + JSON.stringify(apiKey) + ';<\/script>\n' +
     '<script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"><\/script>\n' +
     '<style>' + css + '</style>\n' +
     '</head>\n<body>\n' +
