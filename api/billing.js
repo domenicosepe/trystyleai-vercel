@@ -201,12 +201,14 @@ module.exports = async (req, res) => {
         requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
       });
       const t = r.data.access_token;
-      if (!t) return res.json({ ok: false, error: 'nessun token' });
-      if (!(await isTokenValid(shop, t))) return res.json({ ok: false, error: 'token non valido' });
+      if (!t) { await kvSet('offline_err:' + shop, 'nessun token nella risposta'); return res.json({ ok: false, error: 'nessun token' }); }
+      if (!(await isTokenValid(shop, t))) { await kvSet('offline_err:' + shop, 'token ricevuto ma non valido su GraphQL'); return res.json({ ok: false, error: 'token non valido' }); }
+      await kvSet('offline_err:' + shop, '');
       await kvSet('offline:' + shop, t);
       return res.json({ ok: true, expires: r.data.expires_in || null });
     } catch (e) {
       console.log('store_offline errore:', e.response?.status, JSON.stringify(e.response?.data || e.message));
+      await kvSet('offline_err:' + shop, (e.response?.status || '') + ' ' + JSON.stringify(e.response?.data || e.message).substring(0, 300));
       return res.json({ ok: false, status: e.response?.status || null });
     }
   }
