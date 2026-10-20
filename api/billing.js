@@ -139,10 +139,12 @@ module.exports = async (req, res) => {
   // Supporta sia GET (query string) che POST (JSON body)
   const q = req.query || {};
   const b = (req.method === 'POST' && req.body) ? req.body : {};
+  console.log('=== REQUEST ===', req.method, '| body type:', typeof req.body, '| body keys:', req.body ? Object.keys(req.body).join(',') : 'null', '| content-type:', req.headers['content-type']);
   const action = q.action || b.action;
   const shop = q.shop || b.shop;
   const plan = q.plan || b.plan;
   const session_token = q.session_token || b.session_token;
+  console.log('=== PARAMS ===', 'action:', action, '| shop:', shop, '| session_token length:', session_token ? session_token.length : 0);
 
   // ── Endpoint debug ────────────────────────────────────────
   // ── Endpoint clearkv ─────────────────────────────────────
