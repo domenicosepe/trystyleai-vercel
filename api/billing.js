@@ -161,6 +161,7 @@ module.exports = async (req, res) => {
   if (session_token) console.log('session_token inizio:', session_token.substring(0, 30));
 
   // Per subscribe serve token fresco via token exchange
+  // Per current/cancel può usare KV
   let tokenExchangeResult = null;
   let kvToken = null;
   let finalToken = null;
@@ -168,12 +169,15 @@ module.exports = async (req, res) => {
   if (session_token) {
     tokenExchangeResult = await tokenExchange(session_token, shop);
     if (tokenExchangeResult) {
+      // Salva il token fresco in KV per usi futuri (current, cancel)
       await kvSet('token:' + shop, tokenExchangeResult);
       finalToken = tokenExchangeResult;
     }
   }
 
-  if (!finalToken) {
+  // Per subscribe: NON usare KV come fallback — serve token fresco
+  // Per current/cancel: usa KV se non c'è JWT
+  if (!finalToken && action !== 'subscribe') {
     kvToken = await kvGet('token:' + shop);
     finalToken = kvToken;
   }
@@ -196,8 +200,8 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Piano non valido' });
     }
     if (!token) {
-      console.log('Nessun token valido, redirect a install');
-      return res.redirect(`${APP_URL}/api/install?shop=${encodeURIComponent(shop)}`);
+      console.log('Nessun token valido per subscribe — session_token mancante o token exchange fallito');
+      return res.status(401).json({ error: 'Sessione scaduta. Ricarica la pagina e riprova.', _debug });
     }
 
     const p = PLANS[plan];
