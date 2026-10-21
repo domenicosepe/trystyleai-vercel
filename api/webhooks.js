@@ -2,6 +2,7 @@
 // Iscrizioni dichiarate in shopify.app.toml (i topic GDPR non si possono registrare via API):
 //   compliance: customers/data_request, customers/redact, shop/redact
 //   eventi:     app/uninstalled, app_subscriptions/update
+const { getShopToken, tokenStatus } = require('./_token');
 const crypto = require('crypto');
 const { kvGet, kvSet, kvDel } = require('./_kv');
 const { PLAN_CALLS, planKeyFromName } = require('./_config');
@@ -146,7 +147,7 @@ function parseJson(v) {
 // Abbonamento attivo da Shopify: oggetto, null se nessuno, undefined se non verificabile
 async function activeSubscription(shop) {
   const axios = require('axios');
-  const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
+  const token = (await getShopToken(shop));
   if (!token) return undefined;
   try {
     const r = await axios.post(`https://${shop}/admin/api/2025-01/graphql.json`,
@@ -160,7 +161,7 @@ async function activeSubscription(shop) {
 
 async function syncMeta(shop, status, plan) {
   const axios = require('axios');
-  const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
+  const token = (await getShopToken(shop));
   if (!token) return;
   const h = { headers: { 'X-Shopify-Access-Token': token } };
   const base = `https://${shop}/admin/api/2025-01/metafields.json`;

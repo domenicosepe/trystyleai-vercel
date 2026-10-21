@@ -1,6 +1,7 @@
 // api/billing.js — Shopify Billing API v2
 const axios = require('axios');
 const { FONTS, sanitize, parseStored, planKeyFromName } = require('./_config');
+const { getShopToken, exchangeOffline, needsExchange } = require('./_token');
 
 const API_KEY = process.env.SHOPIFY_API_KEY;
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
@@ -57,8 +58,17 @@ async function kvSet(key, value) {
 
 // ── Token exchange (JWT → OAuth offline token) ────────────
 async function tokenExchange(sessionJwt, shop) {
-  console.log('tokenExchange: API_KEY presente:', !!API_KEY, '| API_SECRET presente:', !!API_SECRET);
-  console.log('tokenExchange: JWT lunghezza:', sessionJwt ? sessionJwt.length : 0);
+  // 1) Token offline con scadenza (richiesto per le app pubbliche): salva anche il refresh token,
+  //    così widget e try-on restano attivi senza che il negozio apra la dashboard.
+  try {
+    const rec = await exchangeOffline(shop, sessionJwt);
+    if (rec && rec.access_token) return rec.access_token;
+  } catch (e) {
+    const msg = (e.response?.status || '') + ' ' + JSON.stringify(e.response?.data || e.message).substring(0, 300);
+    console.log('Exchange offline con scadenza fallito, provo online:', msg);
+    await kvSet('offline_err:' + shop, 'exchange: ' + msg);
+  }
+  // 2) Ripiego: token online (~24h)
   try {
     const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
       client_id: API_KEY,
@@ -123,7 +133,7 @@ async function getValidToken(shop, sessionJwt, requireFresh) {
 
   // 2. Senza JWT: solo se non richiedfresh (es. current/cancel)
   if (!requireFresh) {
-    const cached = await kvGet('token:' + shop);
+    const cached = await getShopToken(shop);
     if (cached) {
       console.log('Token da KV (no JWT disponibile)');
       return cached;
@@ -193,23 +203,17 @@ module.exports = async (req, res) => {
   if (action === 'store_offline') {
     if (!session_token) return res.status(400).json({ ok: false, error: 'session_token mancante' });
     try {
-      const r = await axios.post(`https://${shop}/admin/oauth/access_token`, {
-        client_id: API_KEY,
-        client_secret: API_SECRET,
-        subject_token: session_token,
-        subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token'
-      });
-      const t = r.data.access_token;
-      if (!t) { await kvSet('offline_err:' + shop, 'nessun token nella risposta'); return res.json({ ok: false, error: 'nessun token' }); }
-      if (!(await isTokenValid(shop, t))) { await kvSet('offline_err:' + shop, 'token ricevuto ma non valido su GraphQL'); return res.json({ ok: false, error: 'token non valido' }); }
-      await kvSet('offline_err:' + shop, '');
-      await kvSet('offline:' + shop, t);
-      return res.json({ ok: true, expires: r.data.expires_in || null });
+      if (!(await needsExchange(shop))) return res.json({ ok: true, skipped: true });
+      const rec = await exchangeOffline(shop, session_token);
+      if (!(await isTokenValid(shop, rec.access_token))) {
+        await kvSet('offline_err:' + shop, 'token con scadenza ricevuto ma non valido su GraphQL');
+        return res.json({ ok: false, error: 'token non valido' });
+      }
+      return res.json({ ok: true, expires_in_min: rec.expires_at ? Math.round((rec.expires_at - Date.now()) / 60000) : null });
     } catch (e) {
-      console.log('store_offline errore:', e.response?.status, JSON.stringify(e.response?.data || e.message));
-      await kvSet('offline_err:' + shop, (e.response?.status || '') + ' ' + JSON.stringify(e.response?.data || e.message).substring(0, 300));
+      const msg = (e.response?.status || '') + ' ' + JSON.stringify(e.response?.data || e.message).substring(0, 300);
+      console.log('store_offline errore:', msg);
+      await kvSet('offline_err:' + shop, 'exchange: ' + msg);
       return res.json({ ok: false, status: e.response?.status || null });
     }
   }
@@ -239,7 +243,7 @@ module.exports = async (req, res) => {
   // Per subscribe: NON usare KV come fallback — serve token fresco
   // Per current/cancel: usa KV se non c'è JWT
   if (!finalToken && action !== 'subscribe') {
-    kvToken = await kvGet('token:' + shop);
+    kvToken = await getShopToken(shop);
     finalToken = kvToken;
   }
 

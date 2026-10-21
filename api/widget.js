@@ -1,6 +1,7 @@
 // api/widget.js — Script del negozio (caricato dall'estensione del tema) + endpoint config
 // GET /api/widget?shop=...              → JavaScript del widget
 // GET /api/widget?action=config&shop=... → { active, reason, btnText, btnColor, btnTextColor }
+const { getShopToken, tokenStatus } = require('./_token');
 const axios = require('axios');
 const { parseStored } = require('./_config');
 
@@ -63,7 +64,7 @@ module.exports = async (req, res) => {
 
     const cfg = parseStored(await kvGet('config:' + shop));
 
-    const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
+    const token = (await getShopToken(shop));
     if (!token) return res.json({ active: false, reason: 'token', ...cfg });
 
     const meta = await getMeta(shop, token);
@@ -84,10 +85,9 @@ module.exports = async (req, res) => {
     const shop = String(q.shop || '').toLowerCase();
     if (!SHOP_RE.test(shop)) return res.status(400).json({ error: 'shop non valido' });
     const out = { shop, widget_deployed: true, token_in_kv: false };
-    const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
+    const token = (await getShopToken(shop));
     out.token_in_kv = !!token;
-    out.offline_token = !!(await kvGet('offline:' + shop));
-    out.offline_last_error = await kvGet('offline_err:' + shop);
+    Object.assign(out, await tokenStatus(shop));
     if (token) {
       const h = { headers: { 'X-Shopify-Access-Token': token } };
       try {

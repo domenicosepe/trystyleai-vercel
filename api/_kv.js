@@ -37,3 +37,11 @@ async function kvDel(...keys) {
 }
 
 module.exports = { kvDecode, kvGet, kvSet, kvDel };
+
+// SET NX con scadenza: true se la chiave è stata creata (usato come lucchetto)
+async function kvLock(key, seconds) {
+  try { return (await kvCommand(['SET', key, '1', 'NX', 'EX', String(seconds)])) === 'OK'; }
+  catch (e) { return false; }
+}
+
+module.exports.kvLock = kvLock;

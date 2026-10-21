@@ -1,5 +1,6 @@
 // api/tryon.js — Chiama Fashn.ai e gestisce contatori
 // Il token del negozio viene letto lato server da KV: il browser non lo vede mai.
+const { getShopToken, tokenStatus } = require('./_token');
 const axios = require('axios');
 
 const FASHN_API_KEY = process.env.FASHN_API_KEY;
@@ -69,7 +70,7 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Parametri mancanti' });
   }
 
-  const token = (await kvGet('offline:' + shop)) || (await kvGet('token:' + shop));
+  const token = (await getShopToken(shop));
   if (!token) return res.status(403).json({ error: 'Servizio non disponibile per questo negozio.' });
 
   try {
