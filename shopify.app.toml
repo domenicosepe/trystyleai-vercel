@@ -13,6 +13,8 @@ include_config_on_deploy = true
 
 [access_scopes]
 scopes = "read_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [ "https://trystyleai-vercel.vercel.app/api/install" ]
