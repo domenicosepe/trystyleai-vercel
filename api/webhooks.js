@@ -14,9 +14,6 @@ function planFromName(name) {
 const API_SECRET = process.env.SHOPIFY_API_SECRET;
 const SHOP_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 
-// Body raw necessario per l'HMAC: niente parsing automatico
-module.exports.config = { api: { bodyParser: false } };
-
 function verifyHmac(hmacHeader, rawBody) {
   if (!hmacHeader || !API_SECRET) return false;
   const digest = crypto.createHmac('sha256', API_SECRET).update(rawBody).digest();
@@ -27,47 +24,13 @@ function verifyHmac(hmacHeader, rawBody) {
   return crypto.timingSafeEqual(digest, given);
 }
 
-async function readRaw(req) {
-  // Prima lo stream: accedere a req.body su Vercel avvia il parsing JSON e si perdono i byte originali
-  const chunks = [];
-  try {
-    for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-  } catch (e) {}
-  if (chunks.length) return { raw: Buffer.concat(chunks), source: 'stream' };
-  const b = req.body;
-  if (Buffer.isBuffer(b)) return { raw: b, source: 'body-buffer' };
-  if (typeof b === 'string') return { raw: Buffer.from(b), source: 'body-string' };
-  if (b && typeof b === 'object') return { raw: Buffer.from(JSON.stringify(b)), source: 'body-json' };
-  return { raw: Buffer.alloc(0), source: 'empty' };
-}
-
 // Tutte le chiavi KV legate a un negozio
 function shopKeys(shop) {
   return ['token:' + shop, 'offline:' + shop, 'offline_err:' + shop, 'config:' + shop, 'sub:' + shop];
 }
 
-async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-
-  let rawBody, source;
-  try { const r = await readRaw(req); rawBody = r.raw; source = r.source; } catch (e) { return res.status(400).send('Bad Request'); }
-
-  const hmacHeader = req.headers['x-shopify-hmac-sha256'];
-  if (!verifyHmac(hmacHeader, rawBody)) {
-    console.log('Webhook HMAC non valido | topic:', req.headers['x-shopify-topic'] || '-',
-      '| bytes:', rawBody.length, '| fonte:', source, '| header hmac:', hmacHeader ? 'presente' : 'assente',
-      '| secret configurato:', !!API_SECRET);
-    return res.status(401).send('Unauthorized');
-  }
-
-  const topic = String(req.headers['x-shopify-topic'] || '');
-  const shop = String(req.headers['x-shopify-shop-domain'] || '').toLowerCase();
-  let payload = {};
-  try { payload = JSON.parse(rawBody.toString('utf8') || '{}'); } catch (e) {}
-  console.log('Webhook:', topic, '| shop:', shop, '| id:', req.headers['x-shopify-webhook-id'] || '-');
-
-  if (!SHOP_RE.test(shop)) return res.status(200).send('OK');
-
+// Logica per topic. Risponde sempre dopo aver gestito l'evento (Shopify attende max 5s).
+async function processWebhook(topic, shop, payload) {
   try {
     switch (topic) {
       // ── GDPR ───────────────────────────────────────────
@@ -142,8 +105,36 @@ async function handler(req, res) {
     // Rispondiamo comunque 200: Shopify riproverebbe all'infinito un 500 su dati già gestiti
     console.log('Webhook errore gestione:', topic, e.message);
   }
+}
 
-  return res.status(200).send('OK');
+// ── Handler Web standard (Vercel Node.js runtime) ───────────
+// Con POST(request) Vercel non tocca il body: request.arrayBuffer() restituisce i byte
+// esatti firmati da Shopify, necessari per verificare l'HMAC.
+async function POST(request) {
+  let rawBody;
+  try { rawBody = Buffer.from(await request.arrayBuffer()); }
+  catch (e) { return new Response('Bad Request', { status: 400 }); }
+
+  const hmacHeader = request.headers.get('x-shopify-hmac-sha256');
+  const topic = String(request.headers.get('x-shopify-topic') || '');
+  const shop = String(request.headers.get('x-shopify-shop-domain') || '').toLowerCase();
+
+  if (!verifyHmac(hmacHeader, rawBody)) {
+    console.log('Webhook HMAC non valido | topic:', topic || '-', '| bytes:', rawBody.length,
+      '| header hmac:', hmacHeader ? 'presente' : 'assente', '| secret configurato:', !!API_SECRET);
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  let payload = {};
+  try { payload = JSON.parse(rawBody.toString('utf8') || '{}'); } catch (e) {}
+  console.log('Webhook:', topic, '| shop:', shop, '| id:', request.headers.get('x-shopify-webhook-id') || '-');
+
+  if (SHOP_RE.test(shop)) await processWebhook(topic, shop, payload);
+  return new Response('OK', { status: 200 });
+}
+
+function GET() {
+  return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 }
 
 function parseJson(v) {
@@ -195,6 +186,5 @@ async function syncMeta(shop, status, plan) {
   }
 }
 
-module.exports = handler;
-module.exports.config = { api: { bodyParser: false } };
-module.exports.verifyHmac = verifyHmac;
+// Nessun export di default: così Vercel usa gli handler Web (GET/POST) invece di (req, res)
+module.exports = { GET, POST, verifyHmac, processWebhook };
