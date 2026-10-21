@@ -428,3 +428,5 @@ function widgetMain(APP, SHOP_PARAM) {
     stepUpload();
   }
 }
+
+module.exports.widgetMain = widgetMain;

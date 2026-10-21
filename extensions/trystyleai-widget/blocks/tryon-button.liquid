@@ -4,10 +4,7 @@
   sotto il form "Aggiungi al carrello".
 {% endcomment %}
 <div class="trystyleai-anchor" {{ block.shopify_attributes }}></div>
-<script
-  src="https://trystyleai-vercel.vercel.app/api/widget?shop={{ shop.permanent_domain | url_encode }}"
-  defer
-></script>
+<script src="{{ 'trystyleai.js' | asset_url }}" data-shop="{{ shop.permanent_domain }}" defer></script>
 
 {% schema %}
 {

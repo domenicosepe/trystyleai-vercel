@@ -1,8 +1,11 @@
 {
   "name": "trystyleai-backend",
   "version": "1.2.0",
-  "description": "TryStyleAI — Virtual Try-On Shopify App",
+  "description": "TryStyleAI \u2014 Virtual Try-On Shopify App",
   "dependencies": {
     "axios": "^1.6.0"
+  },
+  "scripts": {
+    "build:widget": "node scripts/build-widget-asset.js"
   }
 }

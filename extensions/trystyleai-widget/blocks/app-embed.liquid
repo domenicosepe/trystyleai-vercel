@@ -4,10 +4,7 @@
   si configurano dalla dashboard dell'app.
 {% endcomment %}
 {% if request.page_type == 'product' %}
-  <script
-    src="https://trystyleai-vercel.vercel.app/api/widget?shop={{ shop.permanent_domain | url_encode }}"
-    defer
-  ></script>
+  <script src="{{ 'trystyleai.js' | asset_url }}" data-shop="{{ shop.permanent_domain }}" defer></script>
 {% endif %}
 
 {% schema %}
