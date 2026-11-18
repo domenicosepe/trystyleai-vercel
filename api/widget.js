@@ -226,14 +226,29 @@ function widgetMain(APP, SHOP_PARAM) {
     document.head.appendChild(st);
   }
 
+  // Visibile davvero: esclude visually-hidden (clip), hidden, aria-hidden e elementi a dimensione zero
+  function isShown(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    if (el.closest('.visually-hidden,.sr-only,[hidden],[aria-hidden="true"],template')) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 20 || r.height < 5) return false;
+    var cs = window.getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+
   function findForm() {
     var forms = document.querySelectorAll('form[action*="/cart/add"]');
+    var fallback = null;
     for (var i = 0; i < forms.length; i++) {
       var f = forms[i];
       if (f.closest('[id*="quick"],[class*="quick"],[class*="drawer"],cart-drawer')) continue;
-      if (f.offsetParent !== null) return f;
+      // Form nascosti delle rate (Shop Pay Installments) e simili
+      if (/installment/i.test((f.getAttribute('id') || '') + ' ' + (f.getAttribute('class') || '') + ' ' + ((f.parentElement && f.parentElement.getAttribute('class')) || ''))) continue;
+      var submit = f.querySelector('[name="add"],button[type="submit"],input[type="submit"],button:not([type])');
+      if (isShown(submit) || isShown(f)) return f;
+      if (!fallback && !f.closest('.visually-hidden,[hidden],[aria-hidden="true"]')) fallback = f;
     }
-    return forms[0] || null;
+    return fallback;
   }
 
   function mount(cfg, product) {
@@ -275,10 +290,10 @@ function widgetMain(APP, SHOP_PARAM) {
       }
       return;
     }
-    if (document.body.contains(btn)) return;
+    if (document.body.contains(btn) && isShown(btn)) return;
     var form = findForm();
-    if (form && form.parentNode) form.parentNode.insertBefore(btn, form.nextSibling);
-    else { if (btn.className.indexOf('tsai-float') < 0) btn.className += ' tsai-float'; document.body.appendChild(btn); }
+    if (form && form.parentNode) { if (btn.previousSibling !== form) form.parentNode.insertBefore(btn, form.nextSibling); }
+    else if (btn.parentNode !== document.body) { if (btn.className.indexOf('tsai-float') < 0) btn.className += ' tsai-float'; document.body.appendChild(btn); }
   }
 
   function resizeImage(file, max, cb) {
