@@ -131,11 +131,40 @@
     btn.querySelector('span').textContent = cfg.btnText;
     btn.addEventListener('click', function (e) { e.preventDefault(); openModal(cfg, product, btn); });
 
-    var anchor = document.querySelector('.trystyleai-anchor');
+    place(btn);
+
+    // Molti temi (es. Horizon) ridisegnano la sezione prodotto al caricamento, al cambio variante
+    // e nell'editor: il contenitore viene sostituito e il bottone sparisce. Lo rimettiamo.
+    var timer = null;
+    function check() { timer = null; place(btn); }
+    function schedule() { if (!timer) timer = setTimeout(check, 60); }
+    if (window.MutationObserver) {
+      new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    }
+    document.addEventListener('shopify:section:load', schedule);
+    document.addEventListener('shopify:block:select', schedule);
+    window.addEventListener('pageshow', schedule);
+  }
+
+  // Sceglie dove mostrare il bottone: blocco app visibile > sotto "Aggiungi al carrello" > flottante
+  function place(btn) {
+    var anchors = document.querySelectorAll('.trystyleai-anchor');
+    var target = null;
+    for (var i = 0; i < anchors.length; i++) {
+      if (anchors[i].getClientRects().length) { target = anchors[i]; break; }
+    }
+    if (!target && anchors.length) target = anchors[0];
+    if (target) {
+      if (btn.parentNode !== target) {
+        btn.className = btn.className.replace(' tsai-float', '');
+        target.appendChild(btn);
+      }
+      return;
+    }
+    if (document.body.contains(btn)) return;
     var form = findForm();
-    if (anchor) anchor.appendChild(btn);
-    else if (form) form.parentNode.insertBefore(btn, form.nextSibling);
-    else { btn.className += ' tsai-float'; document.body.appendChild(btn); }
+    if (form && form.parentNode) form.parentNode.insertBefore(btn, form.nextSibling);
+    else { if (btn.className.indexOf('tsai-float') < 0) btn.className += ' tsai-float'; document.body.appendChild(btn); }
   }
 
   function resizeImage(file, max, cb) {
